@@ -6,18 +6,34 @@ import { odooProxyPlugin } from "./vite-odoo-proxy.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig(() => {
+export default defineConfig(({ command }) => {
+  const isDev = command === "serve";
+
   return {
-    plugins: [react(), odooProxyPlugin()],
+    // Only load the dev proxy plugin in local dev — not during Vercel build
+    plugins: [react(), ...(isDev ? [odooProxyPlugin()] : [])],
+
     resolve: {
       alias: {
-        "@dashboard": path.resolve(__dirname, "../../Downloads"),
+        // Removed broken @dashboard alias that pointed outside the project
+        "@": path.resolve(__dirname, "src"),
       },
     },
+
     server: {
       port: 5173,
-      fs: {
-        allow: [path.resolve(__dirname, "../..")],
+    },
+
+    build: {
+      // Produce source maps so Vercel logs show real file/line numbers on errors
+      sourcemap: false,
+      rollupOptions: {
+        output: {
+          // Split vendor chunk for better caching
+          manualChunks: {
+            react: ["react", "react-dom"],
+          },
+        },
       },
     },
   };
