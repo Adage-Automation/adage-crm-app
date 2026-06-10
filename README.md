@@ -14,14 +14,15 @@ Open **http://localhost:5173/**
 
 ## Odoo credentials
 
-Copy `.env.example` to `.env` and set:
+Copy `.env.example` to `.env` and fill in your values:
 
-- `VITE_ODOO_URL` or `ODOO_URL` — your Odoo instance (default: `https://crm-adage-5.odoo.com`)
-- `VITE_ODOO_DB` or `ODOO_DB` — database name (usually the subdomain, e.g. `crm-adage-5`)
-- `VITE_ODOO_LOGIN` or `ODOO_USER` — email/login of the user who owns the API key or password
-- `VITE_ODOO_API_KEY` or `ODOO_API_KEY` — API key from Odoo → Preferences → Account Security
-- `VITE_ODOO_PASSWORD` or `ODOO_PASS` — account password if you want to authenticate via XML-RPC
+| Variable | Description |
+|---|---|
+| `VITE_ODOO_URL` | Your Odoo instance URL, e.g. `https://your-instance.odoo.com` |
+| `VITE_ODOO_DB` | Database name — usually the subdomain (optional on Odoo SaaS) |
+| `VITE_ODOO_LOGIN` | Login email of the Odoo user |
+| `VITE_ODOO_API_KEY` | API key — generate in Odoo → Settings → Technical → API Keys |
 
-The proxy now supports either a valid API key or a valid account password from either VITE_ or ODOO_-prefixed env names. You still need the correct login email.
+These are **server-side only** — they are never sent to the browser. The proxy (`api/odoo.js` on Vercel, `vite-odoo-proxy.js` in dev) uses HTTP Basic auth (`login:apikey`) and forwards all requests to Odoo, avoiding CORS entirely.
 
-In development, Vite authenticates to Odoo and proxies `/api/odoo/*` so the browser avoids CORS issues.
+For Vercel: add the same four variables in **Project → Settings → Environment Variables**.
