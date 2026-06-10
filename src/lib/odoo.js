@@ -1,16 +1,13 @@
 /**
  * Odoo API client
  *
- * In development:  calls go to /api/odoo  → vite-odoo-proxy.js (dev server middleware)
- * In production:   calls go to /api/odoo  → Vercel serverless function (api/odoo.js)
- *
- * Both environments use the same path so no code-path differences in the app.
+ * All calls go to /api/odoo — the proxy handles authentication.
+ * Dev  → vite-odoo-proxy.js (Vite middleware)
+ * Prod → api/odoo.js (Vercel serverless function)
  */
 
-export const ODOO_BASE = "/api/odoo";
-
 export const fetchOdoo = async (model, method, args = [], kwargs = {}) => {
-  const res = await fetch(`${ODOO_BASE}/web/dataset/call_kw`, {
+  const res = await fetch("/api/odoo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
