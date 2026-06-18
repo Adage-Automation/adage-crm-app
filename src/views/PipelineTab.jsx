@@ -110,7 +110,7 @@ function LeadDetailPanel({ lead, onClose }) {
         <Field label="Expected Closing"     value={closingDate || "No date"} color={closingDate ? urg.dateColor : T.textMuted} />
         <Field label="Lead Status"          value={statusVal} />
         <div style={{ gridColumn: "1 / -1" }}>
-          <a href={`https://crm-adage-6.odoo.com/odoo/crm/${lead.id}`} target="_blank" rel="noopener noreferrer"
+          <a href={`https://crm-adage-7.odoo.com/odoo/crm/${lead.id}`} target="_blank" rel="noopener noreferrer"
             style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, background: T.accentBg, color: T.accent, border: `1px solid ${T.accentBdr}`, textDecoration: "none" }}>
             View in Odoo →
           </a>

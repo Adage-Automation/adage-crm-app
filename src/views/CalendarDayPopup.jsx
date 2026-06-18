@@ -53,14 +53,14 @@ function DetailView({ e, leads, userMap, statusColors, statusBgs, onBack }) {
   const Field = ({ label, value, color }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
       <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 600, letterSpacing: "0.7px", textTransform: "uppercase" }}>{label}</div>
-      <div style={{ fontSize: 13, color: color || T.textPrimary, fontWeight: 500 }}>{value || "â€”"}</div>
+      <div style={{ fontSize: 13, color: color || T.textPrimary, fontWeight: 500 }}>{value || "—"}</div>
     </div>
   );
 
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <button onClick={onBack} style={{ background: T.bgInput, border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 13, color: T.textSecondary, fontFamily: "inherit", transition: "all 0.2s" }}>â† Back</button>
+        <button onClick={onBack} style={{ background: T.bgInput, border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 13, color: T.textSecondary, fontFamily: "inherit", transition: "all 0.2s" }}>← Back</button>
         <div style={{ fontWeight: 800, fontSize: 16, color: T.textPrimary }}>Visit Detail</div>
       </div>
 
@@ -71,7 +71,7 @@ function DetailView({ e, leads, userMap, statusColors, statusBgs, onBack }) {
           <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 600, letterSpacing: "0.7px", textTransform: "uppercase" }}>Status</div>
           {e.x_studio_engagement_status
             ? <span className="pill" style={{ background: statusBgs[e.x_studio_engagement_status] || T.bgInput, color: statusColors[e.x_studio_engagement_status] || T.textMuted, alignSelf: "flex-start" }}>{e.x_studio_engagement_status}</span>
-            : <span style={{ fontSize: 13, color: T.textMuted }}>â€”</span>}
+            : <span style={{ fontSize: 13, color: T.textMuted }}>—</span>}
         </div>
       </div>
 
@@ -93,7 +93,7 @@ function DetailView({ e, leads, userMap, statusColors, statusBgs, onBack }) {
           <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 600, letterSpacing: "0.7px", textTransform: "uppercase" }}>Project Background</div>
           {e.x_studio_project_background
             ? <span className="pill" style={{ background: pbBg, color: pbColor, alignSelf: "flex-start" }}>{e.x_studio_project_background}</span>
-            : <span style={{ fontSize: 13, color: T.textMuted }}>â€”</span>}
+            : <span style={{ fontSize: 13, color: T.textMuted }}>—</span>}
         </div>
         <Field label="Industry" value={lead?.x_studio_industry_type} />
       </div>
@@ -117,7 +117,7 @@ function DayListView({ popupDay, leads, userMap, statusColors, statusBgs, onClos
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
         <div style={{ fontWeight: 800, fontSize: 17, color: T.textPrimary }}>{popupDay.dateLabel}</div>
-        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: T.textMuted, lineHeight: 1, padding: "2px 6px", borderRadius: 6, transition: "all 0.2s" }}>âœ•</button>
+        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: T.textMuted, lineHeight: 1, padding: "2px 6px", borderRadius: 6, transition: "all 0.2s" }}>✕</button>
       </div>
 
       {popupDay.visits.length === 0 ? (
@@ -139,17 +139,17 @@ function DayListView({ popupDay, leads, userMap, statusColors, statusBgs, onClos
                   <span className="pill" style={{ background: statusBgs[e.x_studio_engagement_status] || T.bgInput, color: statusColors[e.x_studio_engagement_status] || T.textMuted, fontSize: 10 }}>{e.x_studio_engagement_status}</span>
                 )}
               </div>
-              <div style={{ fontSize: 11, color: T.textMuted }}>click for details â†’</div>
+              <div style={{ fontSize: 11, color: T.textMuted }}>click for details →</div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px" }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary }}>{lead?.partner_id?.[1] || e.x_crm_lead_id?.[1] || "â€”"}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary }}>{lead?.partner_id?.[1] || e.x_crm_lead_id?.[1] || "—"}</div>
               <div style={{ fontSize: 12, color: T.textSecondary }}>{getPersonNames(e.x_studio_visit_by, userMap)}</div>
               <div style={{ fontSize: 12, fontWeight: 700, color: lead?.expected_revenue > 0 ? T.success : T.textMuted }}>
-                {lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "â€”"}
+                {lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—"}
               </div>
               <div style={{ fontSize: 12, color: REGION_COLORS[lead?.x_studio_responsible_region_1] || T.textMuted, fontWeight: 600 }}>
-                {lead?.x_studio_responsible_region_1 || "â€”"}
+                {lead?.x_studio_responsible_region_1 || "—"}
               </div>
             </div>
 

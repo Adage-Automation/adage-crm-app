@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { T } from "./constants/theme";
 import { fetchOdoo } from "./lib/odoo";
 import { getPersonName } from "./lib/format";
-import { OverviewTab }       from "./views/OverviewTab";
 import { PipelineTab }       from "./views/PipelineTab";
 import { VisitsTab }         from "./views/VisitsTab";
 import { TeamTab }           from "./views/TeamTab";
@@ -10,7 +9,7 @@ import { CalendarDayPopup }  from "./views/CalendarDayPopup";
 import SwimlaneView          from "./views/SwimlaneView";
 
 export default function App() {
-  const [activeTab, setActiveTab]           = useState("overview");
+  const [activeTab, setActiveTab]           = useState("pipeline");
   const [data, setData]                     = useState({ leads: [], engagements: [], stages: [], closedLeads: [] });
   const [loading, setLoading]               = useState(true);
   const [error, setError]                   = useState(null);
@@ -140,7 +139,6 @@ export default function App() {
     .sort((a,b) => new Date(a.x_studio_proposed_date) - new Date(b.x_studio_proposed_date)).slice(0, 12);
 
   const tabs = [
-    { id: "overview", label: "Overview" },
     { id: "pipeline", label: "Pipeline" },
     { id: "visits",   label: "Visits" },
     { id: "team",     label: "Team View" },
@@ -212,17 +210,6 @@ export default function App() {
 
         {!loading && !error && (
           <div className="fade-in">
-            {activeTab === "overview" && (
-              <OverviewTab
-                leads={leads} engagements={engagements} totalRev={totalRev}
-                hotLeads={hotLeads} plannedVisits={plannedVisits}
-                wonLeads={wonLeads} lostLeads={lostLeads} winRate={winRate}
-                overdueLeads={overdueLeads} overdueRev={overdueRev}
-                byRegion={byRegion} byStage={byStage}
-                gbEntries={gbEntries} pbEntries={pbEntries} gbTotal={gbTotal} pbTotal={pbTotal}
-                hotSorted={hotSorted} selectedLead={selectedLead} setSelectedLead={setSelectedLead}
-              />
-            )}
             {activeTab === "pipeline" && (
               <PipelineTab leads={leads} stages={data.stages} />
             )}

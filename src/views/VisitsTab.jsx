@@ -3,7 +3,7 @@ import { T } from "../constants/theme";
 import { REGION_COLORS, PERSON_COLORS } from "../constants/colors";
 import { fmt, fmtDate, getPersonName } from "../lib/format";
 
-// â”€â”€â”€ Local constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- Local constants ----
 const STATUS_CONFIG = {
   Planned:     { bg: "#F59E0B", text: "#fff" },  // yellow
   Completed:   { bg: "#10B981", text: "#fff" },  // green
@@ -11,21 +11,24 @@ const STATUS_CONFIG = {
   Cancelled:   { bg: "#EF4444", text: "#fff" },  // red
 };
 
-const TYPE_EMOJI = {
-  "Email": "âœ‰ï¸", "Phone Call": "ðŸ“ž", "Meeting": "ðŸ¤", "Exhibition": "ðŸ›ï¸",
+const TYPE_ICONS = {
+  "Email":      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/></svg>,
+  "Phone Call": <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.71 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l.82-.82a2 2 0 0 1 2.11-.45c.91.35 1.85.58 2.81.71A2 2 0 0 1 22 16.92z"/></svg>,
+  "Meeting":    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  "Exhibition": <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>,
 };
-const getEmoji = (t) => TYPE_EMOJI[t] || "ðŸ“Œ";
+const getEmoji = (t) => TYPE_ICONS[t] || <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
 
-// â”€â”€â”€ Date formatting: "28 May, Thu" â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- Date formatting ----
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const DAYS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const fmtShort = (iso) => {
-  if (!iso) return "â€”";
+  if (!iso) return "—";
   const d = new Date(iso);
   return `${d.getDate()} ${MONTHS[d.getMonth()]}, ${DAYS[d.getDay()]}`;
 };
 
-// â”€â”€â”€ Urgency logic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- Urgency logic ----
 const URGENCY = {
   overdue: { border: "#EF4444", dateColor: "#EF4444" },
   urgent:  { border: "#FF9933", dateColor: "#FF9933" },
@@ -46,7 +49,7 @@ const getUrgency = (isoDate, status) => {
   return "none";
 };
 
-// â”€â”€â”€ MultiSelect dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- MultiSelect dropdown ----
 function MultiSelect({ label, options, selected, onChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -82,7 +85,7 @@ function MultiSelect({ label, options, selected, onChange }) {
         <span style={{ maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {btnLabel}
         </span>
-        <span style={{ fontSize: 10, flexShrink: 0 }}>{open ? "â–²" : "â–¼"}</span>
+        <span style={{ fontSize: 10, flexShrink: 0 }}>{open ? "▴" : "▾"}</span>
       </button>
       {open && (
         <div style={{
@@ -104,7 +107,7 @@ function MultiSelect({ label, options, selected, onChange }) {
                 background: selected.includes(opt) ? T.accent : "transparent",
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
-                {selected.includes(opt) && <span style={{ color: "#fff", fontSize: 9, lineHeight: 1 }}>âœ“</span>}
+                {selected.includes(opt) && <span style={{ color: "#fff", fontSize: 9, lineHeight: 1 }}>✓</span>}
               </div>
               {opt}
             </div>
@@ -118,7 +121,7 @@ function MultiSelect({ label, options, selected, onChange }) {
   );
 }
 
-// â”€â”€â”€ Detail Panel (mirrors SwimlaneView.DetailPanel) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Detail Panel (mirrors SwimlaneView.DetailPanel) ---
 function DetailPanel({ engagement, lead, userMap, onClose }) {
   if (!engagement) return null;
   const status = engagement.x_studio_engagement_status || "Unknown";
@@ -126,12 +129,12 @@ function DetailPanel({ engagement, lead, userMap, onClose }) {
   const isAnomaly = engagement.x_studio_visit_date && status === "Planned";
 
   const persons = Array.isArray(engagement.x_studio_visit_by) ? engagement.x_studio_visit_by : [];
-  const assignees = persons.map(p => getPersonName(p, userMap)).filter(Boolean).join(", ") || "â€”";
+  const assignees = persons.map(p => getPersonName(p, userMap)).filter(Boolean).join(", ") || "—";
 
   const Field = ({ label, value, color }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
       <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>{label}</div>
-      <div style={{ fontSize: 13, color: color || T.textPrimary, fontWeight: 500 }}>{value || "â€”"}</div>
+      <div style={{ fontSize: 13, color: color || T.textPrimary, fontWeight: 500 }}>{value || "—"}</div>
     </div>
   );
 
@@ -147,22 +150,22 @@ function DetailPanel({ engagement, lead, userMap, onClose }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary }}>Activity Detail</span>
           <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 10px", borderRadius: 100, background: cfg.bg, color: cfg.text }}>{status}</span>
-          {isAnomaly && <span style={{ fontSize: 11, color: "#D97706", fontWeight: 600 }}>âš  Visit recorded but status not updated</span>}
+          {isAnomaly && <span style={{ fontSize: 11, color: "#D97706", fontWeight: 600 }}>⚠ Visit recorded but status not updated</span>}
         </div>
-        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: T.textMuted, lineHeight: 1, padding: "2px 6px", borderRadius: 6, fontFamily: "inherit" }}>Ã—</button>
+        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: T.textMuted, lineHeight: 1, padding: "2px 6px", borderRadius: 6, fontFamily: "inherit" }}>×</button>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px 24px", padding: "18px 20px" }}>
         <Field label="Customer"                value={lead?.partner_id?.[1] || engagement.x_crm_lead_id?.[1]} />
-        <Field label="Deal Value"              value={lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "â€”"} color={T.success} />
+        <Field label="Deal Value"              value={lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—"} color={T.success} />
         <Field label="Engagement Type"         value={engagement.x_studio_engagement_type} />
         <Field label="Assigned To"             value={assignees} />
         <Field label="Proposed Date"           value={fmtDate(engagement.x_studio_proposed_date)} />
         {engagement.x_studio_engagement_status === "Rescheduled" && (
-          <Field label="Rescheduled Date" value={engagement.x_studio_rescheduled_date ? fmtDate(engagement.x_studio_rescheduled_date) : "â€”"} color={engagement.x_studio_rescheduled_date ? "#F97316" : T.textMuted} />
+          <Field label="Rescheduled Date" value={engagement.x_studio_rescheduled_date ? fmtDate(engagement.x_studio_rescheduled_date) : "—"} color={engagement.x_studio_rescheduled_date ? "#F97316" : T.textMuted} />
         )}
         <div style={{ gridColumn: "1 / -1" }}>
-          <Field label="Remarks / Comments" value={engagement.x_studio_remarkscommments || "â€”"} />
+          <Field label="Remarks / Comments" value={engagement.x_studio_remarkscommments || "—"} />
         </div>
         {engagement.x_crm_lead_id?.[0] && (
           <div style={{ gridColumn: "1 / -1", paddingTop: 4 }}>
@@ -175,7 +178,7 @@ function DetailPanel({ engagement, lead, userMap, onClose }) {
                 background: T.accentBg, color: T.accent, border: `1px solid ${T.accentBdr}`,
                 textDecoration: "none", transition: "all 0.2s",
               }}
-            >View in Odoo â†’</a>
+            >View in Odoo →</a>
           </div>
         )}
       </div>
@@ -183,7 +186,7 @@ function DetailPanel({ engagement, lead, userMap, onClose }) {
   );
 }
 
-// â”€â”€â”€ Main VisitsTab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- Main VisitsTab ----
 export function VisitsTab({ leads, engagements, userMap }) {
   const [activeFilter, setActiveFilter] = useState("Planned");
   const [sortOrder, setSortOrder]       = useState("date-asc");
@@ -202,7 +205,7 @@ export function VisitsTab({ leads, engagements, userMap }) {
     return m;
   }, [leads]);
 
-  // Expand engagements into rows â€” one row per engagement using effective date
+  // Expand engagements into rows — one row per engagement using effective date
   const allRows = useMemo(() => {
     const rows = [];
     engagements.forEach(eng => {
@@ -261,7 +264,7 @@ export function VisitsTab({ leads, engagements, userMap }) {
     return true;
   };
 
-  // Dropdown filters â€” OR within each dimension, AND across dimensions
+  // Dropdown filters — OR within each dimension, AND across dimensions
   const matchesDropdowns = (row) => {
     const { eng } = row;
     const lead = leadMap[eng.x_crm_lead_id?.[0]];
@@ -280,7 +283,7 @@ export function VisitsTab({ leads, engagements, userMap }) {
 
   // Count badges per tab (respects dropdown filters)
   const tabCounts = useMemo(() => {
-    const tabs = ["Planned", "Unassigned", "Rescheduled", "All"];
+    const tabs = ["All", "Planned", "Unassigned", "Rescheduled"];
     const counts = {};
     tabs.forEach(tab => {
       counts[tab] = allRows.filter(r => matchesTab(r, tab) && matchesDropdowns(r)).length;
@@ -314,14 +317,14 @@ export function VisitsTab({ leads, engagements, userMap }) {
     return counts;
   }, [visibleRows]);
 
-  // Selected engagement â€” derives from selectedKey
+  // Selected engagement — derives from selectedKey
   const selectedEngagement = useMemo(() => {
     if (!selectedKey) return null;
     const [id] = selectedKey.split("-");
     return engagements.find(e => String(e.id) === id) || null;
   }, [selectedKey, engagements]);
 
-  // Tab change handler â€” clears selected record
+  // Tab change handler — clears selected record
   const handleTabChange = (tabId) => {
     setActiveFilter(tabId);
     setSelectedKey(null);
@@ -330,10 +333,10 @@ export function VisitsTab({ leads, engagements, userMap }) {
   const anyDropdownActive = filterCompany.length > 0 || filterPerson.length > 0 || filterEngType.length > 0 || filterRegion.length > 0;
 
   const FILTER_TABS = [
+    { id: "All",         label: "All" },
     { id: "Planned",     label: "Planned" },
     { id: "Unassigned",  label: "Unassigned" },
     { id: "Rescheduled", label: "Rescheduled" },
-    { id: "All",         label: "All" },
   ];
 
   const COL_HEADERS = ["Date", "Date Type", "Engage. Type", "Company", "Order Value", "Assigned To", "Region", "Status"];
@@ -343,7 +346,7 @@ export function VisitsTab({ leads, engagements, userMap }) {
     <div>
       <style>{`@keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }`}</style>
 
-      {/* â”€â”€ Single row: Filter tabs (left) + MultiSelect dropdowns + sort (right) â”€â”€ */}
+      {/* -- Single row: Filter tabs (left) + MultiSelect dropdowns + sort (right) -- */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
         {/* Tab pills */}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -383,21 +386,21 @@ export function VisitsTab({ leads, engagements, userMap }) {
                 background: "none", color: T.textMuted, fontSize: 12, fontFamily: "inherit",
                 cursor: "pointer",
               }}
-            >âœ•</button>
+            >✕</button>
           )}
           <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} style={{
             padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.border}`,
             background: T.bgCard, color: T.textPrimary, fontSize: 12, fontFamily: "inherit",
             cursor: "pointer", outline: "none",
           }}>
-            <option value="date-asc">Date â†‘</option>
-            <option value="date-desc">Date â†“</option>
-            <option value="value-desc">Value â†“</option>
+            <option value="date-asc">Date ↑</option>
+            <option value="date-desc">Date ↓</option>
+            <option value="value-desc">Value ↓</option>
           </select>
         </div>
       </div>
 
-      {/* â”€â”€ Urgency legend â”€â”€ */}
+      {/* -- Urgency legend -- */}
       <div style={{ fontSize: 11, marginBottom: 10, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
         {[
           { color: "#EF4444", label: "Overdue" },
@@ -411,7 +414,7 @@ export function VisitsTab({ leads, engagements, userMap }) {
         ))}
       </div>
 
-      {/* â”€â”€ Quick-stats type bar â”€â”€ */}
+      {/* -- Quick-stats type bar -- */}
       {Object.keys(typeStats).length > 0 && (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12, padding: "8px 14px", background: T.bgCardAlt, borderRadius: 8, border: `1px solid ${T.border}`, fontSize: 12 }}>
           {Object.entries(typeStats).sort((a,b) => b[1] - a[1]).map(([type, count]) => (
@@ -424,7 +427,7 @@ export function VisitsTab({ leads, engagements, userMap }) {
         </div>
       )}
 
-      {/* â”€â”€ Table â”€â”€ */}
+      {/* -- Table -- */}
       <div className="card" style={{ overflow: "hidden" }}>
         <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "60vh" }}>
           <div style={{ minWidth: 900 }}>
@@ -443,7 +446,7 @@ export function VisitsTab({ leads, engagements, userMap }) {
             {/* Empty state */}
             {visibleRows.length === 0 && (
               <div style={{ padding: "40px 16px", textAlign: "center", color: T.textMuted, fontSize: 13 }}>
-                {activeFilter === "Unassigned" ? "âœ… All visits have been assigned."
+                {activeFilter === "Unassigned" ? "✓ All visits have been assigned."
                   : activeFilter === "Planned"  ? "No planned visits found."
                   : "No results match your filters."}
               </div>
@@ -488,7 +491,7 @@ export function VisitsTab({ leads, engagements, userMap }) {
         </div>
       </div>
 
-      {/* â”€â”€ Detail Panel â”€â”€ */}
+      {/* --- Detail Panel --- */}
       <DetailPanel
         engagement={selectedEngagement}
         lead={selectedEngagement ? leadMap[selectedEngagement.x_crm_lead_id?.[0]] : null}
@@ -499,7 +502,7 @@ export function VisitsTab({ leads, engagements, userMap }) {
   );
 }
 
-// â”€â”€â”€ Single visit row (own component for hover state) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// --- Single visit row (own component for hover state) ---
 function VisitRow({ eng, lead, dateISO, dateType, status, cfg, urgency, isAnomaly, personNames, unassigned, region, regionColor, isSelected, GRID, onRowClick }) {
   const [hovered, setHovered] = useState(false);
 
@@ -527,7 +530,7 @@ function VisitRow({ eng, lead, dateISO, dateType, status, cfg, urgency, isAnomal
     >
       {/* Date */}
       <div style={{ fontSize: 12, fontWeight: 600, color: urgency.dateColor, whiteSpace: "nowrap" }}>
-        {dateISO ? fmtShort(dateISO) : "â€”"}
+        {dateISO ? fmtShort(dateISO) : "—"}
       </div>
 
       {/* Date Type pill */}
@@ -540,24 +543,24 @@ function VisitRow({ eng, lead, dateISO, dateType, status, cfg, urgency, isAnomal
       {/* Engagement Type */}
       <div>
         <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: "rgba(124,58,237,0.10)", color: "#7C3AED" }}>
-          {getEmoji(eng.x_studio_engagement_type)} {eng.x_studio_engagement_type || "â€”"}
+          {getEmoji(eng.x_studio_engagement_type)} {eng.x_studio_engagement_type || "—"}
         </span>
       </div>
 
       {/* Company */}
       <div style={{ fontSize: 12, color: T.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1] || "â€”"}
+        {lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1] || "—"}
       </div>
 
       {/* Order Value */}
       <div style={{ fontSize: 12, fontWeight: 700, color: lead?.expected_revenue > 0 ? T.success : T.textMuted }}>
-        {lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "â€”"}
+        {lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—"}
       </div>
 
       {/* Assigned To */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 3, alignItems: "center" }}>
         {unassigned ? (
-          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: "#F59E0B", color: "#fff" }}>âš  Unassigned</span>
+          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: "#F59E0B", color: "#fff" }}>• Unassigned</span>
         ) : (
           personNames.map((n, i) => (
             <span key={n} style={{ fontSize: 11, color: T.textSecondary }}>{n}{i < personNames.length - 1 ? "," : ""}</span>
@@ -571,7 +574,7 @@ function VisitRow({ eng, lead, dateISO, dateType, status, cfg, urgency, isAnomal
           <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: `${regionColor}18`, color: regionColor }}>
             {region}
           </span>
-        ) : <span style={{ fontSize: 11, color: T.textMuted }}>â€”</span>}
+        ) : <span style={{ fontSize: 11, color: T.textMuted }}>—</span>}
       </div>
 
       {/* Status */}
@@ -580,7 +583,7 @@ function VisitRow({ eng, lead, dateISO, dateType, status, cfg, urgency, isAnomal
           {status}
         </span>
         {isAnomaly && (
-          <span title="Visit recorded but status not updated" style={{ fontSize: 11, cursor: "help" }}>âš </span>
+          <span title="Visit recorded but status not updated" style={{ fontSize: 11, cursor: "help" }}>⚠</span>
         )}
       </div>
     </div>
