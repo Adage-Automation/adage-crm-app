@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { T } from "../constants/theme";
 import { REGION_COLORS, PERSON_COLORS } from "../constants/colors";
 import { fmt, getPersonName } from "../lib/format";
@@ -115,8 +115,7 @@ function DetailPanel({ engagement, lead, userMap, onClose }) {
 }
 
 // --- Drill-down pivot card ---
-function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, userMap }) {
-  const [drill, setDrill] = useState({ level: 0, personName: null, engagementId: null });
+function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, userMap, drill, setDrill }) {
 
   const leadMap = useMemo(() => {
     const m = {}; leads.forEach(l => { m[l.id] = l; }); return m;
@@ -161,36 +160,123 @@ function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, u
     );
   }
 
-  // --- Level 1: person detail grouped by region ---
-  if (drill.level === 1 && selectedPerson) {
-    const personEngs = engsByPerson[selectedPerson] || [];
-    const personIdx = personKeys.indexOf(selectedPerson);
-    const color = PERSON_COLORS[personIdx >= 0 ? personIdx % PERSON_COLORS.length : 0];
+  // --- Levels 0 + 1: single unified render — headline & headers NEVER unmount ---
+  const isDrilldown = drill.level === 1 && !!selectedPerson;
 
-    // Group by region
-    const byRegion = {};
-    personEngs.forEach(eng => {
-      const lead = leadMap[eng.x_crm_lead_id?.[0]];
-      const region = lead?.x_studio_responsible_region_1 || "Unassigned Region";
-      if (!byRegion[region]) byRegion[region] = [];
-      byRegion[region].push(eng);
-    });
+  // Pre-compute drilldown data (safe to compute even when not in drilldown)
+  const drillPersonIdx  = selectedPerson ? personKeys.indexOf(selectedPerson) : -1;
+  const drillColor      = PERSON_COLORS[drillPersonIdx >= 0 ? drillPersonIdx % PERSON_COLORS.length : 0];
+  const drillTotal      = selectedPerson ? Object.values(personRegion[selectedPerson] || {}).reduce((s, v) => s + v, 0) : 0;
+  const drillEngs       = selectedPerson ? (engsByPerson[selectedPerson] || []) : [];
+  const drillByRegion   = {};
+  drillEngs.forEach(eng => {
+    const lead   = leadMap[eng.x_crm_lead_id?.[0]];
+    const region = lead?.x_studio_responsible_region_1 || "Unassigned Region";
+    if (!drillByRegion[region]) drillByRegion[region] = [];
+    drillByRegion[region].push(eng);
+  });
 
-    return (
-      <div className="card" style={{ padding: "20px 22px" }}>
-        <Breadcrumb segments={[
-          { label: "All People", onClick: () => setDrill({ level: 0, personName: null, engagementId: null }) },
-          { label: selectedPerson },
-        ]} />
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-          <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${color}18`, border: `1.5px solid ${color}50`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color, fontWeight: 800, flexShrink: 0 }}>
-            {selectedPerson.split(" ").map(n => n[0]).join("").slice(0, 2)}
-          </div>
-          <span style={{ fontSize: 15, fontWeight: 700, color: T.textPrimary }}>{selectedPerson}</span>
-          <span style={{ fontSize: 11, color: T.textMuted }}>{personEngs.length} engagement{personEngs.length !== 1 ? "s" : ""}</span>
+  return (
+    <div className="card" style={{ padding: "20px 22px" }}>
+
+      {/* ── 1. Section headline — ALWAYS VISIBLE ── */}
+      <div style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.8px", textTransform: "uppercase", fontWeight: 600, marginBottom: isDrilldown ? 10 : 16 }}>
+        Planned visits — per person × per region
+      </div>
+
+      {/* ── 4. Breadcrumb — only when drilled in, sits BELOW headline ── */}
+      {isDrilldown && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, fontSize: 13 }}>
+          <button
+            onClick={() => setDrill({ level: 0, personName: null, engagementId: null })}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: T.accent, fontFamily: "inherit", padding: 0, fontWeight: 500 }}
+          >All People</button>
+          <span style={{ color: T.textMuted }}>›</span>
+          <span style={{ color: T.textPrimary, fontWeight: 600 }}>{selectedPerson}</span>
         </div>
-        <div style={{ maxHeight: 480, overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 }}>
-          {Object.entries(byRegion).map(([region, engs]) => (
+      )}
+
+      {personKeys.length > 0 ? (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 500 }}>
+
+            {/* ── 2. Column headers — ALWAYS VISIBLE ── */}
+            <thead>
+              <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: T.textMuted, letterSpacing: "0.8px", fontWeight: 600 }}>SALES ENGINEER</th>
+                {allRegions.map(r => (
+                  <th key={r} style={{ textAlign: "center", padding: "8px 10px", fontSize: 11, color: REGION_COLORS[r] || T.textMuted, letterSpacing: "0.8px", fontWeight: 600 }}>{r}</th>
+                ))}
+                <th style={{ textAlign: "center", padding: "8px 12px", fontSize: 11, color: T.accent, letterSpacing: "0.8px", fontWeight: 600 }}>TOTAL</th>
+              </tr>
+            </thead>
+
+            {/* ── 3. Rows — all people (level 0) OR single highlighted row (level 1) ── */}
+            <tbody>
+              {isDrilldown ? (
+                /* Single highlighted row for the selected person */
+                <tr style={{ borderBottom: `1px solid ${T.border}`, background: T.accentBg }}>
+                  <td style={{ padding: "10px 12px", fontSize: 13, color: T.textPrimary }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 30, height: 30, borderRadius: "50%", background: `${drillColor}18`, border: `1.5px solid ${drillColor}50`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: drillColor, fontWeight: 800, flexShrink: 0 }}>
+                        {selectedPerson.split(" ").map(n => n[0]).join("").slice(0, 2)}
+                      </div>
+                      <span style={{ fontWeight: 600 }}>{selectedPerson}</span>
+                    </div>
+                  </td>
+                  {allRegions.map(r => (
+                    <td key={r} style={{ textAlign: "center", padding: "10px" }}>
+                      {(personRegion[selectedPerson] || {})[r]
+                        ? <span style={{ background: `${REGION_COLORS[r] || T.accent}15`, color: REGION_COLORS[r] || T.accent, borderRadius: 6, padding: "3px 10px", fontWeight: 700, fontSize: 13 }}>{(personRegion[selectedPerson] || {})[r]}</span>
+                        : <span style={{ color: T.border }}>—</span>}
+                    </td>
+                  ))}
+                  <td style={{ textAlign: "center", padding: "10px", fontSize: 14, fontWeight: 800, color: T.accent }}>{drillTotal}</td>
+                </tr>
+              ) : (
+                /* All people rows */
+                personKeys.map((name, i) => {
+                  const total = Object.values(personRegion[name]).reduce((s, v) => s + v, 0);
+                  return (
+                    <tr key={name}
+                      style={{ borderBottom: `1px solid ${T.border}`, transition: "background 0.15s", cursor: "pointer" }}
+                      onClick={() => setDrill({ level: 1, personName: name, engagementId: null })}
+                      onMouseEnter={e => e.currentTarget.style.background = T.accentBg}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                      <td style={{ padding: "10px 12px", fontSize: 13, color: T.textPrimary }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 30, height: 30, borderRadius: "50%", background: `${PERSON_COLORS[i % PERSON_COLORS.length]}18`, border: `1.5px solid ${PERSON_COLORS[i % PERSON_COLORS.length]}50`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: PERSON_COLORS[i % PERSON_COLORS.length], fontWeight: 800, flexShrink: 0 }}>
+                            {name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+                          </div>
+                          <span style={{ fontWeight: 500 }}>{name}</span>
+                          <span style={{ fontSize: 10, color: T.textMuted, marginLeft: "auto" }}>→</span>
+                        </div>
+                      </td>
+                      {allRegions.map(r => (
+                        <td key={r} style={{ textAlign: "center", padding: "10px" }}>
+                          {personRegion[name][r]
+                            ? <span style={{ background: `${REGION_COLORS[r] || T.accent}15`, color: REGION_COLORS[r] || T.accent, borderRadius: 6, padding: "3px 10px", fontWeight: 700, fontSize: 13 }}>{personRegion[name][r]}</span>
+                            : <span style={{ color: T.border }}>—</span>}
+                        </td>
+                      ))}
+                      <td style={{ textAlign: "center", padding: "10px", fontSize: 14, fontWeight: 800, color: T.accent }}>{total}</td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div style={{ color: T.textMuted, fontSize: 13, textAlign: "center", padding: "32px 0" }}>
+          No visit assignments in Engagement Tracker yet. Assign sales engineers to visits to see data here.
+        </div>
+      )}
+
+      {/* ── 5. Engagement detail list — only in drilldown ── */}
+      {isDrilldown && (
+        <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 16, maxHeight: 400, overflowY: "auto" }}>
+          {Object.entries(drillByRegion).map(([region, engs]) => (
             <div key={region}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                 <div style={{ width: 4, height: 16, borderRadius: 2, background: REGION_COLORS[region] || T.textMuted, flexShrink: 0 }} />
@@ -199,12 +285,13 @@ function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, u
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 12 }}>
                 {engs.map(eng => {
-                  const lead = leadMap[eng.x_crm_lead_id?.[0]];
+                  const lead   = leadMap[eng.x_crm_lead_id?.[0]];
                   const status = eng.x_studio_engagement_status || "Unknown";
-                  const cfg = STATUS_CONFIG[status] || { bg: "#E2E6ED", text: "#4A5568" };
-                  const urg = URGENCY[getUrgency(eng.x_studio_proposed_date, status)];
+                  const cfg    = STATUS_CONFIG[status] || { bg: "#E2E6ED", text: "#4A5568" };
+                  const urg    = URGENCY[getUrgency(eng.x_studio_proposed_date, status)];
                   return (
-                    <div key={eng.id} onClick={() => setDrill({ level: 2, personName: selectedPerson, engagementId: eng.id })}
+                    <div key={eng.id}
+                      onClick={() => setDrill({ level: 2, personName: selectedPerson, engagementId: eng.id })}
                       style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, border: `1px solid ${T.border}`, borderLeft: `4px solid ${urg.border}`, background: T.bgCard, cursor: "pointer", transition: "background 0.15s" }}
                       onMouseEnter={e => e.currentTarget.style.background = T.bgCardAlt}
                       onMouseLeave={e => e.currentTarget.style.background = T.bgCard}>
@@ -223,67 +310,9 @@ function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, u
               </div>
             </div>
           ))}
-          {personEngs.length === 0 && (
+          {drillEngs.length === 0 && (
             <div style={{ textAlign: "center", padding: "24px 0", color: T.textMuted, fontSize: 13 }}>No engagements found for this person.</div>
           )}
-        </div>
-      </div>
-    );
-  }
-
-  // --- Level 0: summary pivot table ---
-  return (
-    <div className="card" style={{ padding: "20px 22px" }}>
-      <div style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.8px", textTransform: "uppercase", fontWeight: 600, marginBottom: 16 }}>
-        Planned visits — per person × per region
-      </div>
-      {personKeys.length > 0 ? (
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 500 }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: T.textMuted, letterSpacing: "0.8px", fontWeight: 600 }}>SALES ENGINEER</th>
-                {allRegions.map(r => (
-                  <th key={r} style={{ textAlign: "center", padding: "8px 10px", fontSize: 11, color: REGION_COLORS[r] || T.textMuted, letterSpacing: "0.8px", fontWeight: 600 }}>{r}</th>
-                ))}
-                <th style={{ textAlign: "center", padding: "8px 12px", fontSize: 11, color: T.accent, letterSpacing: "0.8px", fontWeight: 600 }}>TOTAL</th>
-              </tr>
-            </thead>
-            <tbody>
-              {personKeys.map((name, i) => {
-                const total = Object.values(personRegion[name]).reduce((s, v) => s + v, 0);
-                return (
-                  <tr key={name}
-                    style={{ borderBottom: `1px solid ${T.border}`, transition: "background 0.15s", cursor: "pointer" }}
-                    onClick={() => setDrill({ level: 1, personName: name, engagementId: null })}
-                    onMouseEnter={e => e.currentTarget.style.background = T.accentBg}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <td style={{ padding: "10px 12px", fontSize: 13, color: T.textPrimary }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 30, height: 30, borderRadius: "50%", background: `${PERSON_COLORS[i % PERSON_COLORS.length]}18`, border: `1.5px solid ${PERSON_COLORS[i % PERSON_COLORS.length]}50`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: PERSON_COLORS[i % PERSON_COLORS.length], fontWeight: 800, flexShrink: 0 }}>
-                          {name.split(" ").map(n => n[0]).join("").slice(0, 2)}
-                        </div>
-                        <span style={{ fontWeight: 500 }}>{name}</span>
-                        <span style={{ fontSize: 10, color: T.textMuted, marginLeft: "auto" }}>→</span>
-                      </div>
-                    </td>
-                    {allRegions.map(r => (
-                      <td key={r} style={{ textAlign: "center", padding: "10px" }}>
-                        {personRegion[name][r]
-                          ? <span style={{ background: `${REGION_COLORS[r] || T.accent}15`, color: REGION_COLORS[r] || T.accent, borderRadius: 6, padding: "3px 10px", fontWeight: 700, fontSize: 13 }}>{personRegion[name][r]}</span>
-                          : <span style={{ color: T.border }}>—</span>}
-                      </td>
-                    ))}
-                    <td style={{ textAlign: "center", padding: "10px", fontSize: 14, fontWeight: 800, color: T.accent }}>{total}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div style={{ color: T.textMuted, fontSize: 13, textAlign: "center", padding: "32px 0" }}>
-          No visit assignments in Engagement Tracker yet. Assign sales engineers to visits to see data here.
         </div>
       )}
     </div>
@@ -321,18 +350,15 @@ function WeeklyActivityCard({ engagements, leads, userMap, personKeys }) {
     return engagements.filter(eng => {
       const status = eng.x_studio_engagement_status;
       if (status === "Completed" || status === "Cancelled") return false;
-      return inWeek(eng.x_studio_proposed_date, mon, sun) || inWeek(eng.x_studio_next_follow_up_date, mon, sun);
+      const dateToUse = eng.x_studio_rescheduled_date || eng.x_studio_proposed_date;
+      return inWeek(dateToUse, mon, sun);
     });
   }, [engagements, mon, sun]);
 
   // Urgency priority order
   const urgencyOrder = { overdue: 0, urgent: 1, soon: 2, none: 3 };
   const effectiveDate = (eng) => {
-    const p = eng.x_studio_proposed_date;
-    const f = eng.x_studio_next_follow_up_date;
-    if (!p) return f;
-    if (!f) return p;
-    return p < f ? p : f;
+    return eng.x_studio_rescheduled_date || eng.x_studio_proposed_date;
   };
 
   // Group by person (many2many expansion)
@@ -412,7 +438,6 @@ function WeeklyActivityCard({ engagements, leads, userMap, personKeys }) {
                     const effDate = effectiveDate(eng);
                     const urg = URGENCY[getUrgency(effDate, status)];
                     const isSelected = selectedKey === rowKey;
-                    const hasFollowUp = eng.x_studio_next_follow_up_date && eng.x_studio_next_follow_up_date !== eng.x_studio_proposed_date;
                     return (
                       <div key={rowKey}>
                         <ActivityCard
@@ -420,7 +445,6 @@ function WeeklyActivityCard({ engagements, leads, userMap, personKeys }) {
                           lead={lead}
                           cfg={cfg}
                           urg={urg}
-                          hasFollowUp={hasFollowUp}
                           isSelected={isSelected}
                           onClick={() => setSelectedKey(isSelected ? null : rowKey)}
                         />
@@ -445,8 +469,12 @@ function WeeklyActivityCard({ engagements, leads, userMap, personKeys }) {
   );
 }
 
-function ActivityCard({ eng, lead, cfg, urg, hasFollowUp, isSelected, onClick }) {
+function ActivityCard({ eng, lead, cfg, urg, isSelected, onClick }) {
   const [hovered, setHovered] = useState(false);
+  
+  const showDate = eng.x_studio_rescheduled_date || eng.x_studio_proposed_date;
+  const showDateLabel = eng.x_studio_rescheduled_date ? "Rescheduled" : "Proposed";
+
   return (
     <div
       onClick={onClick}
@@ -470,16 +498,12 @@ function ActivityCard({ eng, lead, cfg, urg, hasFollowUp, isSelected, onClick })
           {lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1] || "—"}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 2, flexWrap: "wrap" }}>
-          {eng.x_studio_proposed_date && (
+          {showDate && (
             <span style={{ fontSize: 10, color: urg.dateColor }}>
-              <span style={{ background: "rgba(100,116,139,0.10)", color: "#64748B", borderRadius: 100, padding: "1px 6px", fontSize: 9, fontWeight: 600, marginRight: 3 }}>Proposed</span>
-              {fmtShort(eng.x_studio_proposed_date)}
-            </span>
-          )}
-          {hasFollowUp && (
-            <span style={{ fontSize: 10, color: T.textSecondary }}>
-              <span style={{ background: "rgba(99,102,241,0.10)", color: "#6366F1", borderRadius: 100, padding: "1px 6px", fontSize: 9, fontWeight: 600, marginRight: 3 }}>Follow-Up</span>
-              {fmtShort(eng.x_studio_next_follow_up_date)}
+              <span style={{ background: eng.x_studio_rescheduled_date ? "rgba(249,115,22,0.10)" : "rgba(100,116,139,0.10)", color: eng.x_studio_rescheduled_date ? "#F97316" : "#64748B", borderRadius: 100, padding: "1px 6px", fontSize: 9, fontWeight: 600, marginRight: 3 }}>
+                {showDateLabel}
+              </span>
+              {fmtShort(showDate)}
             </span>
           )}
         </div>
@@ -491,8 +515,130 @@ function ActivityCard({ eng, lead, cfg, urg, hasFollowUp, isSelected, onClick })
   );
 }
 
+// --- Overdue Activities card ---
+function OverdueActivityCard({ engagements, leads, userMap, personKeys }) {
+  const [selectedKey, setSelectedKey] = useState(null);
+
+  const leadMap = useMemo(() => {
+    const m = {}; leads.forEach(l => { m[l.id] = l; }); return m;
+  }, [leads]);
+
+  const overdueEngs = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return engagements.filter(eng => {
+      const status = eng.x_studio_engagement_status;
+      if (status === "Completed" || status === "Cancelled" || status === "Done") return false;
+      const dateStr = eng.x_studio_rescheduled_date || eng.x_studio_proposed_date;
+      if (!dateStr) return false;
+      const [y, m, d] = dateStr.split("T")[0].split("-").map(Number);
+      const engDate = new Date(y, m - 1, d);
+      return engDate < today;
+    });
+  }, [engagements]);
+
+  // Urgency priority order
+  const urgencyOrder = { overdue: 0, urgent: 1, soon: 2, none: 3 };
+  const effectiveDate = (eng) => {
+    return eng.x_studio_rescheduled_date || eng.x_studio_proposed_date;
+  };
+
+  const groups = useMemo(() => {
+    const map = {};
+    overdueEngs.forEach(eng => {
+      const persons = Array.isArray(eng.x_studio_visit_by) ? eng.x_studio_visit_by : [];
+      const names = persons.map(p => getPersonName(p, userMap)).filter(Boolean);
+      const keys = names.length > 0 ? names : ["Unassigned"];
+      keys.forEach(name => {
+        if (!map[name]) map[name] = [];
+        map[name].push(eng);
+      });
+    });
+
+    Object.values(map).forEach(engs => {
+      engs.sort((a, b) => {
+        const ua = urgencyOrder[getUrgency(effectiveDate(a), a.x_studio_engagement_status)] ?? 3;
+        const ub = urgencyOrder[getUrgency(effectiveDate(b), b.x_studio_engagement_status)] ?? 3;
+        if (ua !== ub) return ua - ub;
+        return (effectiveDate(a) || "").localeCompare(effectiveDate(b) || "");
+      });
+    });
+
+    const orderedKeys = [
+      ...personKeys.filter(n => map[n]),
+      ...Object.keys(map).filter(n => !personKeys.includes(n)),
+    ];
+    return orderedKeys.map(name => ({ name, engs: map[name] }));
+  }, [overdueEngs, userMap, personKeys]);
+
+  if (groups.length === 0) return null;
+
+  return (
+    <div className="card" style={{ padding: "20px 22px", background: "#FEF2F2", border: "1px solid #FECACA" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ fontSize: 11, color: T.danger || "#DC2626", letterSpacing: "0.8px", textTransform: "uppercase", fontWeight: 700 }}>
+          Overdue Activities
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {groups.map(({ name, engs }, gi) => {
+          const personIdx = personKeys.indexOf(name);
+          const color = PERSON_COLORS[personIdx >= 0 ? personIdx % PERSON_COLORS.length : gi % PERSON_COLORS.length];
+          return (
+            <div key={name}>
+              {gi > 0 && <div style={{ height: 1, background: T.border, margin: "12px 0" }} />}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <div style={{ width: 30, height: 30, borderRadius: "50%", background: `${color}18`, border: `1.5px solid ${color}50`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color, fontWeight: 800, flexShrink: 0 }}>
+                  {name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary }}>{name}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, minWidth: 20, textAlign: "center", background: T.accentBg, color: T.accent, borderRadius: 100, padding: "1px 6px" }}>{engs.length}</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingLeft: 40 }}>
+                {engs.map(eng => {
+                  const rowKey = `${eng.id}-${name}`;
+                  const lead = leadMap[eng.x_crm_lead_id?.[0]];
+                  const status = eng.x_studio_engagement_status || "Unknown";
+                  const cfg = { bg: T.danger || "#DC2626", text: "#fff" }; // override for overdue
+                  const effDate = effectiveDate(eng);
+                  const urg = URGENCY[getUrgency(effDate, status)];
+                  const isSelected = selectedKey === rowKey;
+                  return (
+                    <div key={rowKey}>
+                      <ActivityCard
+                        eng={eng}
+                        lead={lead}
+                        cfg={cfg}
+                        urg={urg}
+                        isSelected={isSelected}
+                        onClick={() => setSelectedKey(isSelected ? null : rowKey)}
+                      />
+                      {isSelected && (
+                        <DetailPanel
+                          engagement={eng}
+                          lead={lead}
+                          userMap={userMap}
+                          onClose={() => setSelectedKey(null)}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // --- Main TeamTab export ---
 export function TeamTab({ leads, personRegion, personKeys, allRegions, engagements = [], userMap = {} }) {
+  const [drill, setDrill] = useState({ level: 0, personName: null, engagementId: null });
+  const isPersonSelected = drill.level > 0;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <style>{`@keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }`}</style>
@@ -503,13 +649,25 @@ export function TeamTab({ leads, personRegion, personKeys, allRegions, engagemen
         allRegions={allRegions}
         engagements={engagements}
         userMap={userMap}
+        drill={drill}
+        setDrill={setDrill}
       />
-      <WeeklyActivityCard
-        engagements={engagements}
-        leads={leads}
-        userMap={userMap}
-        personKeys={personKeys}
-      />
+      {!isPersonSelected && (
+        <>
+          <OverdueActivityCard
+            engagements={engagements}
+            leads={leads}
+            userMap={userMap}
+            personKeys={personKeys}
+          />
+          <WeeklyActivityCard
+            engagements={engagements}
+            leads={leads}
+            userMap={userMap}
+            personKeys={personKeys}
+          />
+        </>
+      )}
     </div>
   );
 }

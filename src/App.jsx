@@ -147,7 +147,7 @@ export default function App() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div style={{ fontFamily: "'Plus Jakarta Sans', 'Segoe UI', sans-serif", background: T.bgPage, minHeight: "100vh", color: T.textPrimary }}>
+    <div style={{ fontFamily: "'Inter', 'Plus Jakarta Sans', 'Segoe UI', sans-serif", background: "#F7F7FA", minHeight: "100vh", color: T.textPrimary }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -162,7 +162,7 @@ export default function App() {
         .bar-fill { transition: width 0.8s cubic-bezier(.4,0,.2,1); }
         .visit-row:hover { background: ${T.accentBg} !important; }
         .lead-row:hover { background: ${T.bgCardAlt} !important; cursor: pointer; }
-        .pipeline-card:hover { border-color: ${T.accent} !important; box-shadow: 0 2px 8px rgba(99,102,241,0.12) !important; }
+        .pipeline-card:hover { border-color: ${T.accent} !important; box-shadow: 0 4px 12px rgba(2,129,138,0.15) !important; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         .fade-in { animation: fadeIn 0.35s ease forwards; }
         @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
@@ -173,7 +173,7 @@ export default function App() {
       {/* Header */}
       <div style={{ borderBottom: `1px solid ${T.border}`, padding: "0 28px", background: T.bgHeader, display: "flex", alignItems: "center", justifyContent: "space-between", height: 60, position: "sticky", top: 0, zIndex: 100, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 34, height: 34, background: "linear-gradient(135deg, #6366F1, #8B5CF6)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(99,102,241,0.3)" }}>
+          <div style={{ width: 34, height: 34, background: "linear-gradient(135deg, #02818A, #026E76)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(2,129,138,0.3)" }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           </div>
           <div>
@@ -197,7 +197,7 @@ export default function App() {
       <div style={{ padding: "24px 28px", minHeight: "calc(100vh - 60px)" }}>
         {loading && (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 400, gap: 16 }}>
-            <div className="pulse" style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg, #6366F1, #8B5CF6)" }} />
+            <div className="pulse" style={{ width: 40, height: 40, borderRadius: 10, background: "linear-gradient(135deg, #02818A, #04A8B4)" }} />
             <div style={{ color: T.textMuted, fontSize: 14 }}>Connecting to Odoo CRM…</div>
           </div>
         )}

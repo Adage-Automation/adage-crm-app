@@ -74,9 +74,37 @@ const getWeekStart = (date) => {
 const addDays = (date, n) => { const d = new Date(date); d.setDate(d.getDate() + n); return d; };
 const addMonths = (date, n) => new Date(date.getFullYear(), date.getMonth() + n, 1);
 
-// ─── Tooltip — disabled (click-to-open detail panel replaces hover popup) ─────
+// ─── Tooltip — simple hover popup near cursor
 function Tooltip({ content, children }) {
-  return <>{children}</>;
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  return (
+    <span
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onMouseMove={(e) => setPos({ x: e.clientX + 12, y: e.clientY + 12 })}
+      style={{ position: "relative", display: "inline-block" }}
+    >
+      {children}
+      {open && (
+        <div style={{
+          position: "fixed",
+          left: pos.x,
+          top: pos.y,
+          zIndex: 1200,
+          background: T.bgCard,
+          border: `1px solid ${T.border}`,
+          padding: "8px 10px",
+          borderRadius: 8,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+          whiteSpace: "pre-wrap",
+          fontSize: 12,
+          color: T.textPrimary,
+          maxWidth: 380,
+        }}>{content}</div>
+      )}
+    </span>
+  );
 }
 
 // ─── MultiSelect dropdown ─────────────────────────────────────────────────────
@@ -758,6 +786,11 @@ export default function SwimlaneView() {
     setSelectedPill(key === currentKey ? null : { engId: eng.id, isFollowUp });
   };
 
+  // Toggle a status filter on/off (used by the top summary badges)
+  const toggleStatus = (status) => {
+    setSelectedStatuses(prev => prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status]);
+  };
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", fontFamily: "'Plus Jakarta Sans','Segoe UI',sans-serif" }}>
@@ -826,6 +859,27 @@ export default function SwimlaneView() {
           </button>
         </div>
       </div>
+
+      {/* ── Summary bar (shared) — placed under header; badges act as toggle tabs ── */}
+      {!loading && !error && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10 }}>
+            <span style={{ fontWeight: 700, color: T.textPrimary }}>{summary.total} activities</span>
+          </div>
+          {[["Planned", STATUS_CONFIG.Planned.bg],["Completed", STATUS_CONFIG.Completed.bg],["Rescheduled", STATUS_CONFIG.Rescheduled.bg],["Cancelled", STATUS_CONFIG.Cancelled.bg]].map(([label, color]) => (
+            <div key={label} onClick={() => toggleStatus(label)} style={{ cursor: "pointer", padding: "8px 12px", borderRadius: 10, border: `1px solid ${T.border}`, background: selectedStatuses.includes(label) ? T.bgCard : "transparent", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
+              <span style={{ fontWeight: 700, color: T.textSecondary }}>{summary[label]}</span>
+              <span style={{ color: T.textMuted }}>{label}</span>
+            </div>
+          ))}
+          {summary.anomaly > 0 && (
+            <div style={{ padding: "8px 12px", borderRadius: 10, border: `1px solid ${T.border}`, background: T.bgCard }}>
+              <span style={{ color: "#D97706", fontWeight: 600 }}>⚠ {summary.anomaly} status not updated</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Loading / Error ── */}
       {loading && (
@@ -992,49 +1046,7 @@ export default function SwimlaneView() {
             />
           )}
 
-          {/* ── Summary bar (shared) ── */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap",
-            padding: "10px 16px", background: T.bgCard,
-            border: `1px solid ${T.border}`, borderRadius: 10, fontSize: 12,
-            marginTop: 12,
-          }}>
-            <span style={{ fontWeight: 700, color: T.textPrimary }}>{summary.total} activities</span>
-            <SummaryBadge label="Planned"     count={summary.Planned}     color={STATUS_CONFIG.Planned.bg} />
-            <SummaryBadge label="Completed"   count={summary.Completed}   color={STATUS_CONFIG.Completed.bg} />
-            <SummaryBadge label="Rescheduled" count={summary.Rescheduled} color={STATUS_CONFIG.Rescheduled.bg} />
-            <SummaryBadge label="Cancelled"   count={summary.Cancelled}   color={STATUS_CONFIG.Cancelled.bg} />
-            {summary.anomaly > 0 && (
-              <span style={{ color: "#D97706", fontWeight: 600 }}>⚠ {summary.anomaly} status not updated</span>
-            )}
-          </div>
-
-          {/* ── Icon legend bar ── */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap",
-            padding: "10px 16px", background: T.bgCard,
-            border: `1px solid ${T.border}`, borderRadius: 10, fontSize: 12,
-            marginTop: 6,
-          }}>
-            <span style={{
-              fontSize: 10, fontWeight: 700, color: T.textMuted,
-              letterSpacing: "0.8px", textTransform: "uppercase", flexShrink: 0,
-            }}>
-              Activity Types
-            </span>
-            {[
-              { emoji: "✉️",  label: "Email" },
-              { emoji: "📞", label: "Phone Call" },
-              { emoji: "🤝", label: "Meeting" },
-              { emoji: "🏛️", label: "Exhibition" },
-              { emoji: "📌", label: "Other" },
-            ].map(({ emoji, label }) => (
-              <span key={label} style={{ display: "flex", alignItems: "center", gap: 5, color: T.textSecondary }}>
-                <span style={{ fontSize: 14 }}>{emoji}</span>
-                <span>{label}</span>
-              </span>
-            ))}
-          </div>
+          {/* removed duplicate summary + activity legend — badges now at top */}
 
           {/* ── Detail panel (shared) ── */}
           <DetailPanel

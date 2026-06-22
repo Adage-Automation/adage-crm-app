@@ -1,34 +1,39 @@
 export const T = {
-  // Backgrounds
-  bgPage:    "#F0F2F5",
-  bgHeader:  "#FFFFFF",
-  bgCard:    "#FFFFFF",
-  bgCardAlt: "#F8F9FB",
-  bgInput:   "#F0F2F5",
+  // ── Backgrounds ──────────────────────────────────────────────────────────────
+  bgPage:       "#F7F7FA",       // page/app background
+  bgCard:       "#FFFFFF",       // kanban card, list row, panels
+  bgCardAlt:    "#F9F9FB",       // hovered card or alternate row
+  bgSidebar:    "#FFFFFF",       // sidebar/header if applicable
+  bgHeader:     "#FFFFFF",       // header background
+  bgInput:      "#F3F4F6",       // input or donut chart track background
 
-  // Borders
-  border:    "#E2E6ED",
-  borderMd:  "#D0D5DD",
+  // ── Borders ──────────────────────────────────────────────────────────────────
+  border:       "#E5E7EB",       // default card/container border
+  borderMd:     "#D1D5DB",       // medium emphasis border (inputs, dividers)
 
-  // Text
-  textPrimary:  "#1A1F36",
-  textSecondary:"#4A5568",
-  textMuted:    "#8A94A6",
-  textLabel:    "#6B7280",
+  // ── Text ─────────────────────────────────────────────────────────────────────
+  textPrimary:  "#111827",       // headings, lead names
+  textSecondary:"#374151",       // body / field values
+  textMuted:    "#9CA3AF",       // labels, secondary metadata
 
-  // Brand / Accent
-  accent:    "#6366F1",
-  accentBg:  "rgba(99,102,241,0.08)",
-  accentBdr: "rgba(99,102,241,0.25)",
+  // ── Accent (Adage brand teal) ────────────────────────────────────────────────
+  accent:       "#02818A",       // buttons, links, highlights, active states
+  accentHover:  "#026E76",       // accent on hover (slightly darker)
+  accentBg:     "#E6F4F5",       // accent-tinted background (selected, badge bg)
+  accentBdr:    "#9DD0D4",       // accent-tinted border
 
-  // Semantic
-  success:   "#10B981",
-  successBg: "rgba(16,185,129,0.08)",
-  warning:   "#F59E0B",
-  warningBg: "rgba(245,158,11,0.10)",
-  danger:    "#EF4444",
-  dangerBg:  "rgba(239,68,68,0.08)",
+  // ── Semantic ─────────────────────────────────────────────────────────────────
+  success:      "#059669",       // deal value, won status
+  successBg:    "#D1FAE5",
+  warning:      "#D97706",       // urgent closing date
+  warningBg:    "#FEF3C7",
+  danger:       "#DC2626",       // overdue
+  dangerBg:     "#FEE2E2",
 
-  // Scrollbar
-  scrollThumb: "#D0D5DD",
+  // ── Shadows ──────────────────────────────────────────────────────────────────
+  shadowSm:     "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)",
+  shadowMd:     "0 4px 12px rgba(0,0,0,0.10)",
+
+  // ── Scrollbar ────────────────────────────────────────────────────────────────
+  scrollThumb:  "#D1D5DB",       // scrollbar thumb color
 };
