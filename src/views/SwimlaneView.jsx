@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchOdoo } from "../lib/odoo";
+import { LeadCard } from "./PipelineTab";
 
 // ─── Theme tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -16,10 +17,10 @@ const T = {
 };
 
 const STATUS_CONFIG = {
-  Planned:     { bg: "#F59E0B", text: "#fff", border: "#D97706" },  // yellow
-  Completed:   { bg: "#10B981", text: "#fff", border: "#059669" },  // green
-  Rescheduled: { bg: "#F97316", text: "#fff", border: "#EA580C" },  // orange
-  Cancelled:   { bg: "#EF4444", text: "#fff", border: "#DC2626" },  // red
+  Planned:     { bg: "#10B981", text: "#fff", border: "#059669" },  // green
+  Completed:   { bg: "#3B82F6", text: "#fff", border: "#2563EB" },  // blue
+  Rescheduled: { bg: "#F59E0B", text: "#fff", border: "#D97706" },  // yellow
+  Cancelled:   { bg: "#94A3B8", text: "#fff", border: "#64748B" },  // gray
   Unknown:     { bg: "#E2E6ED", text: "#4A5568", border: "#D0D5DD" },
 };
 
@@ -248,94 +249,7 @@ function Pill({ engagement, lead, isFollowUp, empMap, isSelected, onClick }) {
   );
 }
 
-// ─── Detail panel ─────────────────────────────────────────────────────────────
-function DetailPanel({ engagement, lead, empMap, onClose }) {
-  if (!engagement) return null;
-  const status = engagement.x_studio_engagement_status || "Unknown";
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.Unknown;
-  const isAnomaly = engagement.x_studio_visit_date && status === "Planned";
 
-  const persons = Array.isArray(engagement.x_studio_visit_by) ? engagement.x_studio_visit_by : [];
-  const assignees = persons.map(p => resolveEmpName(p, empMap)).filter(Boolean).join(", ") || "—";
-
-  const Field = ({ label, value, color, mono }) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>{label}</div>
-      <div style={{ fontSize: 13, color: color || T.textPrimary, fontWeight: 500, fontFamily: mono ? "monospace" : "inherit" }}>
-        {value || "—"}
-      </div>
-    </div>
-  );
-
-  return (
-    <div style={{
-      marginTop: 10, border: `1px solid ${T.border}`, borderRadius: 12,
-      background: T.bgCard, overflow: "hidden",
-      animation: "fadeIn 0.2s ease",
-    }}>
-      {/* Panel header */}
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "12px 20px", borderBottom: `1px solid ${T.border}`,
-        background: T.bgCardAlt,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary }}>Activity Detail</span>
-          <span style={{
-            fontSize: 11, fontWeight: 600, padding: "2px 10px", borderRadius: 100,
-            background: cfg.bg, color: cfg.text,
-          }}>{status}</span>
-          {isAnomaly && (
-            <span style={{ fontSize: 11, color: "#D97706", fontWeight: 600 }}>
-              ⚠ Visit recorded but status not updated
-            </span>
-          )}
-        </div>
-        <button onClick={onClose} style={{
-          background: "none", border: "none", cursor: "pointer",
-          fontSize: 18, color: T.textMuted, lineHeight: 1, padding: "2px 6px",
-          borderRadius: 6, fontFamily: "inherit",
-        }}>×</button>
-      </div>
-
-      {/* Panel body — two-column grid */}
-      <div style={{
-        display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
-        gap: "16px 24px", padding: "18px 20px",
-      }}>
-        <Field label="Customer" value={lead?.partner_id?.[1] || engagement.x_crm_lead_id?.[1]} />
-        <Field label="Deal Value" value={lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—"} color={T.success} />
-        <Field label="Engagement Type" value={engagement.x_studio_engagement_type} />
-        <Field label="Assigned To" value={assignees} />
-        <Field label="Proposed Date" value={fmtDate(engagement.x_studio_proposed_date)} />
-        {engagement.x_studio_engagement_status === "Rescheduled" && (
-          <Field label="Rescheduled Date" value={engagement.x_studio_rescheduled_date ? fmtDate(engagement.x_studio_rescheduled_date) : "—"} color={engagement.x_studio_rescheduled_date ? "#F97316" : T.textMuted} />
-        )}
-        <div style={{ gridColumn: "1 / -1" }}>
-          <Field label="Remarks / Comments" value={engagement.x_studio_remarkscommments || "—"} />
-        </div>
-        {engagement.x_crm_lead_id?.[0] && (
-          <div style={{ gridColumn: "1 / -1", paddingTop: 4 }}>
-            <a
-              href={`https://crm-adage-7.odoo.com/odoo/crm/${engagement.x_crm_lead_id[0]}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "7px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-                background: T.accentBg, color: T.accent,
-                border: `1px solid ${T.accentBdr}`,
-                textDecoration: "none", transition: "all 0.2s",
-              }}
-            >
-              View in Odoo →
-            </a>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ─── SummaryBadge ─────────────────────────────────────────────────────────────
 function SummaryBadge({ label, count, color }) {
@@ -1049,12 +963,14 @@ export default function SwimlaneView() {
           {/* removed duplicate summary + activity legend — badges now at top */}
 
           {/* ── Detail panel (shared) ── */}
-          <DetailPanel
-            engagement={selectedEngagement}
-            lead={selectedEngagement ? leadMap[selectedEngagement.x_crm_lead_id?.[0]] : null}
-            empMap={empMap}
-            onClose={() => setSelectedPill(null)}
-          />
+          {selectedEngagement && leadMap[selectedEngagement.x_crm_lead_id?.[0]] && (
+            <div style={{ marginBottom: 12, marginTop: 12 }}>
+              <LeadCard 
+                lead={leadMap[selectedEngagement.x_crm_lead_id?.[0]]} 
+                onClose={() => setSelectedPill(null)} 
+              />
+            </div>
+          )}
         </>
       )}
     </div>

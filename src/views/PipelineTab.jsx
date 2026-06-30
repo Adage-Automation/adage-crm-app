@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { T } from "../constants/theme";
 import { REGION_COLORS, PERSON_COLORS } from "../constants/colors";
 import { fmt } from "../lib/format";
@@ -84,48 +84,113 @@ function MultiSelect({ label, options, selected, onChange }) {
   );
 }
 
-// ─── Lead Detail Panel ────────────────────────────────────────────────────────
-function LeadDetailPanel({ lead, onClose }) {
+// ─── Lead Card (used in both List and Kanban views) ───────────────────────────
+export function LeadCard({ lead, onClose }) {
+  const [hovered, setHovered] = useState(false);
   if (!lead) return null;
-  const closingDate = fmtShort(lead.x_studio_expected_closing);
   const urg = URGENCY[getUrgency(lead.x_studio_expected_closing)];
+  const closingDate = fmtShort(lead.x_studio_expected_closing);
+  const regionColor = REGION_COLORS[lead.x_studio_responsible_region_1] || T.textMuted;
   const statusVal = lead.x_studio_lead_status;
-  const isActive = statusVal === "ACTIVE";
-  const statusPill = getPill(statusVal);
+  const pill = getPill(statusVal);
+
   const Field = ({ label, value, color }) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>{label}</div>
-      <div style={{ fontSize: 13, color: color || T.textPrimary, fontWeight: 500 }}>{value || "—"}</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 600, letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 12, color: color || T.textPrimary, fontWeight: 500, lineHeight: 1.35 }}>{value || "—"}</div>
     </div>
   );
+
   return (
-    <div style={{ marginTop: 6, border: `1px solid ${T.border}`, borderRadius: 10, background: T.bgCard, overflow: "hidden", animation: "fadeIn 0.2s ease" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px", borderBottom: `1px solid ${T.border}`, background: T.bgCardAlt }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary }}>{lead.name}</span>
-          {statusVal && (
-            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: statusPill.bg, color: statusPill.text }}>{statusVal}</span>
-          )}
-        </div>
-        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: T.textMuted, lineHeight: 1, padding: "2px 6px", fontFamily: "inherit" }}>×</button>
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: hovered ? T.bgCardAlt : T.bgCard,
+        border: `1px solid ${T.border}`,
+        boxShadow: hovered ? T.shadowMd : T.shadowSm,
+        borderRadius: 12,
+        padding: "12px 14px",
+        transition: "all 0.15s",
+        marginBottom: onClose ? 12 : 8,
+        marginTop: onClose ? 8 : 0,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        height: "100%",
+        position: "relative"
+      }}
+    >
+      {onClose && (
+        <button onClick={onClose} style={{ position: "absolute", top: 10, right: 10, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "50%", cursor: "pointer", fontSize: 14, color: T.textMuted, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}>×</button>
+      )}
+
+      {/* Row 1: Status + project type + region tags */}
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", paddingRight: onClose ? 24 : 0 }}>
+        {statusVal && (
+          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 100, background: pill.bg, color: pill.text }}>
+            {statusVal}
+          </span>
+        )}
+        {lead.x_studio_project_background && (
+          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: getProjectTypePill(lead.x_studio_project_background).bg, color: getProjectTypePill(lead.x_studio_project_background).color }}>
+            {lead.x_studio_project_background}
+          </span>
+        )}
+        {lead.x_studio_responsible_region_1 && (
+          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: `${regionColor}18`, color: regionColor }}>
+            {lead.x_studio_responsible_region_1}
+          </span>
+        )}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px 20px", padding: "14px 16px" }}>
-        <Field label="Company" value={lead.partner_id?.[1] || lead.partner_name} />
-        <Field label="Stage" value={lead.stage_id?.[1]} />
-        <Field label="Region" value={lead.x_studio_responsible_region_1} color={REGION_COLORS[lead.x_studio_responsible_region_1] || T.textPrimary} />
-        <Field label="Assigned Salesperson" value={lead.x_studio_assigned_salesperson?.[1]} />
+
+      {/* Row 2: Lead name with urgency dot */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+        {closingDate && (
+          <span style={{
+            display: "inline-block", width: 8, height: 8, borderRadius: "50%",
+            background: urg.border === "transparent" ? "transparent" : urg.border,
+            flexShrink: 0, marginTop: 4,
+          }} />
+        )}
+        <div style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary, lineHeight: 1.4, wordBreak: "break-word" }}>
+          {lead.name}
+        </div>
+      </div>
+
+      {/* Row 3: Company */}
+      <Field label="Company" value={lead.partner_id?.[1] || lead.partner_name} />
+
+      {/* Row 4: Grid */}
+      <div style={{ display: "grid", gridTemplateColumns: onClose ? "repeat(auto-fit, minmax(140px, 1fr))" : "1fr 1fr", gap: "8px 12px" }}>
+        <Field label="Salesperson" value={lead.x_studio_assigned_salesperson?.[1]} />
         <Field label="Sales Lead" value={lead.x_studio_sales_lead?.[1]} />
-        <Field label="Deal Value" value={lead.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—"} color={T.success} />
-        <Field label="Project Type" value={lead.x_studio_project_background} />
-        <Field label="Expected Closing" value={closingDate || "No date"} color={closingDate ? urg.dateColor : T.textMuted} />
-        <Field label="Lead Status" value={statusVal} />
-        <div style={{ gridColumn: "1 / -1" }}>
-          <a href={`https://crm-adage-7.odoo.com/odoo/crm/${lead.id}`} target="_blank" rel="noopener noreferrer"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, background: T.accentBg, color: T.accent, border: `1px solid ${T.accentBdr}`, textDecoration: "none" }}>
-            View in Odoo →
-          </a>
-        </div>
+        <Field label="Deal Value" value={lead.expected_revenue > 0 ? fmt(lead.expected_revenue) : null} color={T.success} />
+        <Field label="Stage" value={lead.stage_id?.[1]} />
+        <Field label="Closing" value={closingDate || "No date"} color={closingDate ? urg.dateColor : T.textMuted} />
       </div>
+
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
+
+      {/* Divider */}
+      <div style={{ height: 1, background: T.border }} />
+
+      {/* View in Odoo button */}
+      <a
+        href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+          padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+          background: T.accentBg, color: T.accent, border: `1px solid ${T.accentBdr}`,
+          textDecoration: "none", transition: "background 0.15s, box-shadow 0.15s",
+          letterSpacing: "0.2px",
+        }}
+      >
+        View in Odoo →
+      </a>
     </div>
   );
 }
@@ -400,108 +465,7 @@ function ListRow({ lead, isSelected, onClick }) {
   );
 }
 
-// ─── Kanban card (Make.com style) ────────────────────────────────────────────
-function KanbanCard({ lead }) {
-  const [hovered, setHovered] = useState(false);
-  const urg = URGENCY[getUrgency(lead.x_studio_expected_closing)];
-  const closingDate = fmtShort(lead.x_studio_expected_closing);
-  const regionColor = REGION_COLORS[lead.x_studio_responsible_region_1] || T.textMuted;
-  const statusVal = lead.x_studio_lead_status;
-  const pill = getPill(statusVal);
 
-  const Field = ({ label, value, color }) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 600, letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 12, color: color || T.textPrimary, fontWeight: 500, lineHeight: 1.35 }}>{value || "—"}</div>
-    </div>
-  );
-
-  return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        background: hovered ? T.bgCardAlt : T.bgCard,
-        border: `1px solid ${T.border}`,
-        boxShadow: hovered ? T.shadowMd : T.shadowSm,
-        borderRadius: 12,
-        padding: "12px 14px",
-        transition: "all 0.15s",
-        marginBottom: 8,
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-        height: "100%",
-      }}
-    >
-      {/* Row 1: Status + project type + region tags */}
-      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-        {statusVal && (
-          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 100, background: pill.bg, color: pill.text }}>
-            {statusVal}
-          </span>
-        )}
-        {lead.x_studio_project_background && (
-          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: getProjectTypePill(lead.x_studio_project_background).bg, color: getProjectTypePill(lead.x_studio_project_background).color }}>
-            {lead.x_studio_project_background}
-          </span>
-        )}
-        {lead.x_studio_responsible_region_1 && (
-          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: `${regionColor}18`, color: regionColor }}>
-            {lead.x_studio_responsible_region_1}
-          </span>
-        )}
-      </div>
-
-      {/* Row 2: Lead name with urgency dot */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
-        {closingDate && (
-          <span style={{
-            display: "inline-block", width: 8, height: 8, borderRadius: "50%",
-            background: urg.border === "transparent" ? "transparent" : urg.border,
-            flexShrink: 0, marginTop: 3,
-          }} />
-        )}
-        <div style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary, lineHeight: 1.4, wordBreak: "break-word" }}>
-          {lead.name}
-        </div>
-      </div>
-
-      {/* Row 3: Company */}
-      <Field label="Company" value={lead.partner_id?.[1] || lead.partner_name} />
-
-      {/* Row 4: Two-col grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px" }}>
-        <Field label="Sales Lead" value={lead.x_studio_sales_lead?.[1]} />
-        <Field label="Deal Value" value={lead.expected_revenue > 0 ? fmt(lead.expected_revenue) : null} color={T.success} />
-        <Field label="Stage" value={lead.stage_id?.[1]} />
-        <Field label="Closing" value={closingDate || "No date"} color={closingDate ? urg.dateColor : T.textMuted} />
-      </div>
-
-      {/* Spacer */}
-      <div style={{ flex: 1 }} />
-
-      {/* Divider */}
-      <div style={{ height: 1, background: T.border }} />
-
-      {/* View in Odoo button */}
-      <a
-        href={`https://crm-adage-7.odoo.com/odoo/crm/${lead.id}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-          padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-          background: T.accentBg, color: T.accent, border: `1px solid ${T.accentBdr}`,
-          textDecoration: "none", transition: "background 0.15s, box-shadow 0.15s",
-          letterSpacing: "0.2px",
-        }}
-      >
-        View in Odoo →
-      </a>
-    </div>
-  );
-}
 
 // ─── Main PipelineTab ─────────────────────────────────────────────────────────
 export function PipelineTab({ leads, stages }) {
@@ -781,7 +745,7 @@ export function PipelineTab({ leads, stages }) {
                     <ListRow lead={lead} isSelected={selectedLeadId === lead.id} onClick={() => setSelectedLeadId(selectedLeadId === lead.id ? null : lead.id)} />
                     {selectedLeadId === lead.id && (
                       <div style={{ padding: "0 14px 10px" }}>
-                        <LeadDetailPanel lead={lead} onClose={() => setSelectedLeadId(null)} />
+                        <LeadCard lead={lead} onClose={() => setSelectedLeadId(null)} />
                       </div>
                     )}
                   </div>
@@ -793,7 +757,7 @@ export function PipelineTab({ leads, stages }) {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14, marginTop: 10 }}>
                 {groupLeads.map(lead => (
                   <div key={lead.id} style={{ display: "flex", flexDirection: "column" }}>
-                    <KanbanCard lead={lead} />
+                    <LeadCard lead={lead} />
                   </div>
                 ))}
               </div>

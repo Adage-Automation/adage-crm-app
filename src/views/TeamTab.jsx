@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { T } from "../constants/theme";
 import { REGION_COLORS, PERSON_COLORS } from "../constants/colors";
 import { fmt, getPersonName } from "../lib/format";
+import { LeadCard } from "./PipelineTab";
 
 // ---- Local constants (mirrored from VisitsTab) ----
 const STATUS_CONFIG = {
@@ -63,56 +64,7 @@ const inWeek = (iso, mon, sun) => {
   return date >= mon && date <= sun;
 };
 
-// ---- Detail panel (local copy same as VisitsTab.DetailPanel) ----
-function DetailPanel({ engagement, lead, userMap, onClose }) {
-  if (!engagement) return null;
-  const status = engagement.x_studio_engagement_status || "Unknown";
-  const cfg = STATUS_CONFIG[status] || { bg: "#E2E6ED", text: "#4A5568" };
-  const isAnomaly = engagement.x_studio_visit_date && status === "Planned";
-  const persons = Array.isArray(engagement.x_studio_visit_by) ? engagement.x_studio_visit_by : [];
-  const assignees = persons.map(p => getPersonName(p, userMap)).filter(Boolean).join(", ") || "—";
 
-  const Field = ({ label, value, color }) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>{label}</div>
-      <div style={{ fontSize: 13, color: color || T.textPrimary, fontWeight: 500 }}>{value || "—"}</div>
-    </div>
-  );
-
-  return (
-    <div style={{ marginTop: 8, border: `1px solid ${T.border}`, borderRadius: 10, background: T.bgCard, overflow: "hidden", animation: "fadeIn 0.2s ease" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px", borderBottom: `1px solid ${T.border}`, background: T.bgCardAlt }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: T.textPrimary }}>Activity Detail</span>
-          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: cfg.bg, color: cfg.text }}>{status}</span>
-          {isAnomaly && <span style={{ fontSize: 11, color: "#D97706", fontWeight: 600 }}>⚠ Visit recorded but status not updated</span>}
-        </div>
-        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: T.textMuted, lineHeight: 1, padding: "2px 6px", fontFamily: "inherit" }}>×</button>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px 20px", padding: "14px 16px" }}>
-        <Field label="Customer"              value={lead?.partner_id?.[1] || engagement.x_crm_lead_id?.[1]} />
-        <Field label="Deal Value"            value={lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—"} color={T.success} />
-        <Field label="Engagement Type"       value={engagement.x_studio_engagement_type} />
-        <Field label="Assigned To"           value={assignees} />
-        <Field label="Proposed Date"         value={fmtShort(engagement.x_studio_proposed_date)} />
-        <Field label="Actual Interaction"    value={engagement.x_studio_visit_date ? fmtShort(engagement.x_studio_visit_date) : "Not recorded"} color={engagement.x_studio_visit_date ? T.textPrimary : T.textMuted} />
-        <Field label="Next Follow-Up"        value={engagement.x_studio_next_follow_up_date ? fmtShort(engagement.x_studio_next_follow_up_date) : "None"} color={engagement.x_studio_next_follow_up_date ? T.textPrimary : T.textMuted} />
-        <div style={{ gridColumn: "1 / -1" }}>
-          <Field label="Remarks / Comments"  value={engagement.x_studio_remarkscommments || "—"} />
-        </div>
-        {engagement.x_crm_lead_id?.[0] && (
-          <div style={{ gridColumn: "1 / -1" }}>
-            <a href={`https://crm-adage-7.odoo.com/odoo/crm/${engagement.x_crm_lead_id[0]}`}
-              target="_blank" rel="noopener noreferrer"
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, background: T.accentBg, color: T.accent, border: `1px solid ${T.accentBdr}`, textDecoration: "none" }}>
-              View in Odoo →
-            </a>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // --- Drill-down pivot card ---
 function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, userMap, drill, setDrill }) {
@@ -155,7 +107,11 @@ function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, u
           { label: selectedPerson, onClick: () => setDrill({ level: 1, personName: selectedPerson, engagementId: null }) },
           { label: company },
         ]} />
-        <DetailPanel engagement={selectedEng} lead={lead} userMap={userMap} onClose={() => setDrill({ level: 1, personName: selectedPerson, engagementId: null })} />
+        {lead && (
+          <div style={{ marginTop: 12 }}>
+            <LeadCard lead={lead} onClose={() => setDrill({ level: 1, personName: selectedPerson, engagementId: null })} />
+          </div>
+        )}
       </div>
     );
   }
@@ -288,7 +244,8 @@ function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, u
                   const lead   = leadMap[eng.x_crm_lead_id?.[0]];
                   const status = eng.x_studio_engagement_status || "Unknown";
                   const cfg    = STATUS_CONFIG[status] || { bg: "#E2E6ED", text: "#4A5568" };
-                  const urg    = URGENCY[getUrgency(eng.x_studio_proposed_date, status)];
+                  const effDate = eng.x_studio_rescheduled_date || eng.x_studio_proposed_date;
+                  const urg    = URGENCY[getUrgency(effDate, status)];
                   return (
                     <div key={eng.id}
                       onClick={() => setDrill({ level: 2, personName: selectedPerson, engagementId: eng.id })}
@@ -300,7 +257,7 @@ function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, u
                         <div style={{ fontSize: 12, fontWeight: 600, color: T.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1] || "—"}
                         </div>
-                        <div style={{ fontSize: 11, color: urg.dateColor }}>{fmtShort(eng.x_studio_proposed_date)}</div>
+                        <div style={{ fontSize: 11, color: urg.dateColor }}>{fmtShort(effDate)}</div>
                       </div>
                       <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: cfg.bg, color: cfg.text, flexShrink: 0 }}>{status}</span>
                       <span style={{ fontSize: 11, color: T.textMuted, flexShrink: 0 }}>→</span>
@@ -448,13 +405,10 @@ function WeeklyActivityCard({ engagements, leads, userMap, personKeys }) {
                           isSelected={isSelected}
                           onClick={() => setSelectedKey(isSelected ? null : rowKey)}
                         />
-                        {isSelected && (
-                          <DetailPanel
-                            engagement={eng}
-                            lead={lead}
-                            userMap={userMap}
-                            onClose={() => setSelectedKey(null)}
-                          />
+                        {isSelected && lead && (
+                          <div style={{ marginTop: 8 }}>
+                            <LeadCard lead={lead} onClose={() => setSelectedKey(null)} />
+                          </div>
                         )}
                       </div>
                     );
@@ -614,13 +568,10 @@ function OverdueActivityCard({ engagements, leads, userMap, personKeys }) {
                         isSelected={isSelected}
                         onClick={() => setSelectedKey(isSelected ? null : rowKey)}
                       />
-                      {isSelected && (
-                        <DetailPanel
-                          engagement={eng}
-                          lead={lead}
-                          userMap={userMap}
-                          onClose={() => setSelectedKey(null)}
-                        />
+                      {isSelected && lead && (
+                        <div style={{ marginTop: 8 }}>
+                          <LeadCard lead={lead} onClose={() => setSelectedKey(null)} />
+                        </div>
                       )}
                     </div>
                   );

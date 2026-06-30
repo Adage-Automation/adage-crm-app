@@ -7,7 +7,7 @@
  *
  * Reads from .env:
  *   VITE_ODOO_URL      – https://your-instance.odoo.com
- *   VITE_ODOO_DB       – crm-adage-7
+ *   VITE_ODOO_DB       – crm-adage-9
  *   VITE_ODOO_LOGIN    – your.email@company.com
  *   VITE_ODOO_API_KEY  – API key (preferred), OR
  *   VITE_ODOO_PASSWORD – account password (fallback)
