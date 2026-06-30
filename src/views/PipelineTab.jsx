@@ -341,6 +341,38 @@ function RevenueDonut({ leads, onSegmentClick, activeKey }) {
   return <InteractiveDonut title="Revenue by Lead Status" segments={segments} total={total} centerLabel="Pipeline" onSegmentClick={onSegmentClick} activeKey={activeKey} />;
 }
 
+function RegionDonut({ leads, onSegmentClick, activeKey }) {
+  const byRegion = {};
+  leads.forEach(l => {
+    const k = l.x_studio_responsible_region_1 ? String(l.x_studio_responsible_region_1).trim() : "No Region";
+    if (!byRegion[k]) byRegion[k] = { rev: 0, count: 0, color: REGION_COLORS[k] || T.accent };
+    byRegion[k].rev += l.expected_revenue || 0;
+    byRegion[k].count += 1;
+  });
+  const entries = Object.entries(byRegion).filter(([, d]) => d.rev > 0).sort((a, b) => b[1].rev - a[1].rev);
+  const total = entries.reduce((s, [, d]) => s + d.rev, 0) || 1;
+  const segments = entries.map(([key, d]) => ({ key, ...d }));
+  return <InteractiveDonut title="Revenue by Responsible Region" segments={segments} total={total} centerLabel="Pipeline" onSegmentClick={onSegmentClick} activeKey={activeKey} />;
+}
+
+function PersonDonut({ leads, onSegmentClick, activeKey }) {
+  const byPerson = {};
+  leads.forEach(l => {
+    const k = l.x_studio_assigned_salesperson?.[1] || l.user_id?.[1] || "Unassigned";
+    if (!byPerson[k]) byPerson[k] = { rev: 0, count: 0, color: null };
+    byPerson[k].rev += l.expected_revenue || 0;
+    byPerson[k].count += 1;
+  });
+
+  const entries = Object.entries(byPerson).filter(([, d]) => d.rev > 0).sort((a, b) => b[1].rev - a[1].rev);
+  const total = entries.reduce((s, [, d]) => s + d.rev, 0) || 1;
+  const keys = entries.map(([k]) => k);
+  const colorMap = {};
+  keys.forEach((k, i) => { colorMap[k] = PERSON_COLORS[i % PERSON_COLORS.length]; });
+  const segments = entries.map(([key, d]) => ({ key, ...d, color: colorMap[key] }));
+  return <InteractiveDonut title="Revenue by Assigned Person" segments={segments} total={total} centerLabel="Pipeline" onSegmentClick={onSegmentClick} activeKey={activeKey} />;
+}
+
 // ─── Greenfield vs Brownfield pie chart ──────────────────────────────────────
 const GB_PIE_COLORS = {
   "Greenfield": { bg: "rgba(16,185,129,0.12)", solid: "#059669" },
@@ -470,22 +502,24 @@ function ListRow({ lead, isSelected, onClick }) {
 // ─── Main PipelineTab ─────────────────────────────────────────────────────────
 export function PipelineTab({ leads, stages }) {
   const [viewMode, setViewMode] = useState("list");
-  const [activeOnly, setActiveOnly] = useState(false);
-  const [groupBy, setGroupBy] = useState("region");
+  const [activeOnly, setActiveOnly] = useState(true);
+  const [groupBy, setGroupBy] = useState("stage");
   const [filterRegion, setFilterRegion] = useState([]);
   const [filterStatus, setFilterStatus] = useState([]);
   const [filterPerson, setFilterPerson] = useState([]);
   const [selectedLeadId, setSelectedLeadId] = useState(null);
   const [collapsed, setCollapsed] = useState({});
   const [selectedMonth, setSelectedMonth] = useState(null); // "YYYY-MM" drill-down from bar chart
-  const [filterLeadStatus, setFilterLeadStatus] = useState(null); // drill from status donut
+  const [donutFilter, setDonutFilter] = useState(null); // { kind: "lead_status" | "region" | "person", key: string }
   const [filterProjectType, setFilterProjectType] = useState(null); // drill from GB donut
   const [searchQuery, setSearchQuery] = useState("");
 
   // Dropdown options
   const regionOptions = useMemo(() => [...new Set(leads.map(l => l.x_studio_responsible_region_1).filter(Boolean))].sort(), [leads]);
   const statusOptions = useMemo(() => [...new Set(leads.map(l => l.x_studio_lead_status).filter(Boolean))].sort(), [leads]);
-  const personOptions = useMemo(() => [...new Set(leads.map(l => l.x_studio_assigned_salesperson?.[1]).filter(Boolean))].sort(), [leads]);
+  const personOptions = useMemo(() => [...new Set(leads.map(l => (l.x_studio_assigned_salesperson?.[1] || l.user_id?.[1])).filter(Boolean))].sort(), [leads]);
+
+  useEffect(() => { setDonutFilter(null); }, [groupBy]);
 
   // Filtered leads
   const filteredLeads = useMemo(() => {
@@ -493,10 +527,18 @@ export function PipelineTab({ leads, stages }) {
       if (activeOnly && String(l.x_studio_lead_status || "") !== "ACTIVE") return false;
       if (filterRegion.length > 0 && !filterRegion.includes(l.x_studio_responsible_region_1)) return false;
       if (filterStatus.length > 0 && !filterStatus.includes(l.x_studio_lead_status)) return false;
-      if (filterPerson.length > 0 && !filterPerson.includes(l.x_studio_assigned_salesperson?.[1])) return false;
-      if (filterLeadStatus) {
+      if (filterPerson.length > 0 && !filterPerson.includes(l.x_studio_assigned_salesperson?.[1] || l.user_id?.[1])) return false;
+      if (donutFilter?.kind === "lead_status") {
         const val = l.x_studio_lead_status ? String(l.x_studio_lead_status).trim() : null;
-        if (val !== filterLeadStatus) return false;
+        if (val !== donutFilter.key) return false;
+      }
+      if (donutFilter?.kind === "region") {
+        const val = l.x_studio_responsible_region_1 ? String(l.x_studio_responsible_region_1).trim() : "No Region";
+        if (val !== donutFilter.key) return false;
+      }
+      if (donutFilter?.kind === "person") {
+        const val = l.x_studio_assigned_salesperson?.[1] || l.user_id?.[1] || "Unassigned";
+        if (val !== donutFilter.key) return false;
       }
       if (filterProjectType) {
         const val = l.x_studio_project_background && l.x_studio_project_background !== false
@@ -519,7 +561,7 @@ export function PipelineTab({ leads, stages }) {
       }
       return true;
     });
-  }, [leads, activeOnly, filterRegion, filterStatus, filterPerson, filterLeadStatus, filterProjectType, selectedMonth, searchQuery]);
+  }, [leads, activeOnly, filterRegion, filterStatus, filterPerson, donutFilter, filterProjectType, selectedMonth, searchQuery]);
 
   // Group + sort
   const groups = useMemo(() => {
@@ -528,6 +570,7 @@ export function PipelineTab({ leads, stages }) {
       let key;
       if (groupBy === "region") key = l.x_studio_responsible_region_1 || "No Region";
       else if (groupBy === "person") key = l.x_studio_assigned_salesperson?.[1] || "Unassigned";
+      else if (groupBy === "stage") key = l.stage_id?.[1] || "No Stage";
       else key = l.x_studio_lead_status || "No Status";
       if (!map[key]) map[key] = [];
       map[key].push(l);
@@ -555,6 +598,7 @@ export function PipelineTab({ leads, stages }) {
   const groupColor = (key, idx) => {
     if (groupBy === "region") return REGION_COLORS[key] || T.textMuted;
     if (groupBy === "person") return PERSON_COLORS[idx % PERSON_COLORS.length];
+    if (groupBy === "stage") return PERSON_COLORS[idx % PERSON_COLORS.length];
     return getPill(key).text;
   };
 
@@ -588,7 +632,7 @@ export function PipelineTab({ leads, stages }) {
 
           {/* Group by segmented */}
           <div style={{ display: "flex", borderRadius: 8, border: `1px solid ${T.border}`, overflow: "hidden" }}>
-            {[["region", "By Region"], ["person", "By Person"], ["stage", "By Stage"]].map(([val, lbl], i) => (
+            {[["stage", "By Stage"], ["region", "By Region"], ["person", "By Person"]].map(([val, lbl], i) => (
               <button key={val} onClick={() => setGroupBy(val)} style={{
                 ...segBtn(groupBy === val),
                 borderRight: i < 2 ? `1px solid ${T.border}` : "none",
@@ -645,15 +689,35 @@ export function PipelineTab({ leads, stages }) {
       </div>
 
       {/* ── Charts row ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: filterLeadStatus || filterProjectType ? 6 : 14 }}>
-        <RevenueDonut
-          leads={filteredLeads}
-          activeKey={filterLeadStatus}
-          onSegmentClick={(key) => {
-            setFilterLeadStatus(prev => prev === key ? null : key);
-            handleSetViewMode("list");
-          }}
-        />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: donutFilter || filterProjectType ? 6 : 14 }}>
+        {groupBy === "stage" ? (
+          <RevenueDonut
+            leads={filteredLeads}
+            activeKey={donutFilter?.kind === "lead_status" ? donutFilter.key : null}
+            onSegmentClick={(key) => {
+              setDonutFilter(prev => (prev?.kind === "lead_status" && prev.key === key) ? null : ({ kind: "lead_status", key }));
+              handleSetViewMode("list");
+            }}
+          />
+        ) : groupBy === "region" ? (
+          <RegionDonut
+            leads={filteredLeads}
+            activeKey={donutFilter?.kind === "region" ? donutFilter.key : null}
+            onSegmentClick={(key) => {
+              setDonutFilter(prev => (prev?.kind === "region" && prev.key === key) ? null : ({ kind: "region", key }));
+              handleSetViewMode("list");
+            }}
+          />
+        ) : (
+          <PersonDonut
+            leads={filteredLeads}
+            activeKey={donutFilter?.kind === "person" ? donutFilter.key : null}
+            onSegmentClick={(key) => {
+              setDonutFilter(prev => (prev?.kind === "person" && prev.key === key) ? null : ({ kind: "person", key }));
+              handleSetViewMode("list");
+            }}
+          />
+        )}
         <GreenfieldDonut
           leads={filteredLeads}
           activeKey={filterProjectType}
@@ -670,18 +734,30 @@ export function PipelineTab({ leads, stages }) {
       </div>
 
       {/* ── Active drill-down indicators ── */}
-      {(filterLeadStatus || filterProjectType || selectedMonth) && (
+      {(donutFilter || filterProjectType || selectedMonth) && (
         <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontSize: 11, color: T.textMuted }}>Filtered by:</span>
-          {filterLeadStatus && (() => {
-            const p = getPill(filterLeadStatus);
+          {donutFilter?.kind === "lead_status" && (() => {
+            const p = getPill(donutFilter.key);
             return (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100, background: p.bg, color: p.text, border: `1px solid ${p.text}40` }}>
-                Status: {filterLeadStatus}
-                <button onClick={() => setFilterLeadStatus(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "inherit", lineHeight: 1, padding: 0, marginLeft: 2 }}>×</button>
+                Status: {donutFilter.key}
+                <button onClick={() => setDonutFilter(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "inherit", lineHeight: 1, padding: 0, marginLeft: 2 }}>×</button>
               </span>
             );
           })()}
+          {donutFilter?.kind === "region" && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100, background: `${(REGION_COLORS[donutFilter.key] || T.accent)}18`, color: REGION_COLORS[donutFilter.key] || T.accent, border: `1px solid ${(REGION_COLORS[donutFilter.key] || T.accent)}40` }}>
+              Region: {donutFilter.key}
+              <button onClick={() => setDonutFilter(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "inherit", lineHeight: 1, padding: 0, marginLeft: 2 }}>×</button>
+            </span>
+          )}
+          {donutFilter?.kind === "person" && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100, background: `${T.accent}18`, color: T.accent, border: `1px solid ${T.accent}40` }}>
+              Person: {donutFilter.key}
+              <button onClick={() => setDonutFilter(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "inherit", lineHeight: 1, padding: 0, marginLeft: 2 }}>×</button>
+            </span>
+          )}
           {filterProjectType && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100, background: getProjectTypePill(filterProjectType).bg, color: getProjectTypePill(filterProjectType).color, border: `1px solid ${getProjectTypePill(filterProjectType).color}40` }}>
               Type: {filterProjectType}

@@ -1,6 +1,48 @@
-﻿import { T } from "../constants/theme";
+import { T } from "../constants/theme";
 import { REGION_COLORS } from "../constants/colors";
 import { fmt, fmtDate, getPersonNames } from "../lib/format";
+
+const getDisplayDateMeta = (engagement) => {
+  const status = engagement?.x_studio_engagement_status;
+
+  if (status === "Rescheduled" && engagement?.x_studio_rescheduled_date) {
+    return {
+      date: engagement.x_studio_rescheduled_date,
+      label: "Rescheduled",
+      detailLabel: "Rescheduled Date",
+      color: "#F59E0B",
+      bg: T.warningBg,
+    };
+  }
+
+  if (engagement?.x_studio_proposed_date) {
+    return {
+      date: engagement.x_studio_proposed_date,
+      label: "Proposed",
+      detailLabel: "Proposed Date",
+      color: T.textSecondary,
+      bg: T.bgInput,
+    };
+  }
+
+  if (engagement?.x_studio_rescheduled_date) {
+    return {
+      date: engagement.x_studio_rescheduled_date,
+      label: "Rescheduled",
+      detailLabel: "Rescheduled Date",
+      color: "#F59E0B",
+      bg: T.warningBg,
+    };
+  }
+
+  return {
+    date: null,
+    label: "Proposed",
+    detailLabel: "Proposed Date",
+    color: T.textMuted,
+    bg: T.bgInput,
+  };
+};
 
 export function CalendarDayPopup({ popupDay, setPopupDay, popupDetail, setPopupDetail, leads, userMap }) {
   if (!popupDay) return null;
@@ -45,6 +87,7 @@ export function CalendarDayPopup({ popupDay, setPopupDay, popupDetail, setPopupD
 
 function DetailView({ e, leads, userMap, statusColors, statusBgs, onBack }) {
   const lead = leads.find(l => l.id === e.x_crm_lead_id?.[0]);
+  const { date: detailDate, detailLabel } = getDisplayDateMeta(e);
   const pbColor = e.x_studio_project_background === "Greenfield" ? T.accent
     : e.x_studio_project_background === "Brownfield" ? "#F59E0B" : T.textMuted;
   const pbBg = e.x_studio_project_background === "Greenfield" ? T.accentBg
@@ -82,7 +125,7 @@ function DetailView({ e, leads, userMap, statusColors, statusBgs, onBack }) {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
-        <Field label="Proposed Date" value={fmtDate(e.x_studio_proposed_date)} />
+        <Field label={detailLabel} value={fmtDate(detailDate)} />
         <Field label="Actual Visit Date" value={fmtDate(e.x_studio_visit_date)} />
         <Field label="Next Follow-up" value={fmtDate(e.x_studio_next_follow_up_date)} />
       </div>
@@ -124,6 +167,7 @@ function DayListView({ popupDay, leads, userMap, statusColors, statusBgs, onClos
         <div style={{ textAlign: "center", padding: "32px 0", color: T.textMuted, fontSize: 14 }}>No visits on this date.</div>
       ) : popupDay.visits.map((e, idx) => {
         const lead = leads.find(l => l.id === e.x_crm_lead_id?.[0]);
+        const { date: displayDate, label: displayDateLabel, color: displayDateColor, bg: displayDateBg } = getDisplayDateMeta(e);
         return (
           <div key={e.id} onClick={() => onSelectDetail(e)}
             style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: "14px 16px", marginBottom: idx < popupDay.visits.length - 1 ? 10 : 0, cursor: "pointer", transition: "all 0.2s", background: T.bgCard }}
@@ -152,6 +196,17 @@ function DayListView({ popupDay, leads, userMap, statusColors, statusBgs, onClos
                 {lead?.x_studio_responsible_region_1 || "—"}
               </div>
             </div>
+
+            {displayDate && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
+                <span className="pill" style={{ background: displayDateBg, color: displayDateColor, fontSize: 10 }}>
+                  {displayDateLabel}
+                </span>
+                <span style={{ fontSize: 12, color: displayDateColor, fontWeight: 600 }}>
+                  {fmtDate(displayDate)}
+                </span>
+              </div>
+            )}
 
             {e.x_studio_remarkscommments && (
               <div style={{ marginTop: 8, fontSize: 11, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Component } from "react";
 import { T } from "./constants/theme";
 import { fetchOdoo } from "./lib/odoo";
 import { getPersonName } from "./lib/format";
@@ -7,6 +7,30 @@ import { VisitsTab }         from "./views/VisitsTab";
 import { TeamTab }           from "./views/TeamTab";
 import { CalendarDayPopup }  from "./views/CalendarDayPopup";
 import SwimlaneView          from "./views/SwimlaneView";
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      const msg = this.state.error?.message || String(this.state.error);
+      return (
+        <div style={{ background: T.dangerBg, border: "1px solid rgba(239,68,68,0.2)", borderRadius: 12, padding: 20, color: "#B91C1C", fontSize: 14 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8 }}>UI Error</div>
+          <div style={{ color: "#B91C1C" }}>{msg}</div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function App() {
   const [activeTab, setActiveTab]           = useState("pipeline");
@@ -209,7 +233,8 @@ export default function App() {
         )}
 
         {!loading && !error && (
-          <div className="fade-in">
+          <ErrorBoundary key={activeTab}>
+            <div className="fade-in">
             {activeTab === "pipeline" && (
               <PipelineTab leads={leads} stages={data.stages} />
             )}
@@ -227,7 +252,8 @@ export default function App() {
                 <SwimlaneView />
               </div>
             )}
-          </div>
+            </div>
+          </ErrorBoundary>
         )}
       </div>
 

@@ -1,8 +1,7 @@
 import { useState, useMemo } from "react";
 import { T } from "../constants/theme";
 import { REGION_COLORS, PERSON_COLORS } from "../constants/colors";
-import { fmt, getPersonName } from "../lib/format";
-import { LeadCard } from "./PipelineTab";
+import { fmt, fmtDate, getPersonName, getPersonNames } from "../lib/format";
 
 // ---- Local constants (mirrored from VisitsTab) ----
 const STATUS_CONFIG = {
@@ -64,6 +63,136 @@ const inWeek = (iso, mon, sun) => {
   return date >= mon && date <= sun;
 };
 
+const getDisplayDateMeta = (engagement) => {
+  const status = engagement?.x_studio_engagement_status;
+
+  if (status === "Rescheduled" && engagement?.x_studio_rescheduled_date) {
+    return {
+      date: engagement.x_studio_rescheduled_date,
+      label: "Rescheduled",
+      detailLabel: "Rescheduled Date",
+      pillBg: "rgba(249,115,22,0.10)",
+      pillColor: "#F97316",
+    };
+  }
+
+  if (engagement?.x_studio_proposed_date) {
+    return {
+      date: engagement.x_studio_proposed_date,
+      label: "Proposed",
+      detailLabel: "Proposed Date",
+      pillBg: "rgba(100,116,139,0.10)",
+      pillColor: "#64748B",
+    };
+  }
+
+  if (engagement?.x_studio_rescheduled_date) {
+    return {
+      date: engagement.x_studio_rescheduled_date,
+      label: "Rescheduled",
+      detailLabel: "Rescheduled Date",
+      pillBg: "rgba(249,115,22,0.10)",
+      pillColor: "#F97316",
+    };
+  }
+
+  return {
+    date: null,
+    label: "Proposed",
+    detailLabel: "Proposed Date",
+    pillBg: "rgba(100,116,139,0.10)",
+    pillColor: "#64748B",
+  };
+};
+
+function EngagementDetailCard({ engagement, lead, userMap }) {
+  if (!engagement) return null;
+
+  const status = engagement.x_studio_engagement_status || "Unknown";
+  const statusCfg = STATUS_CONFIG[status] || { bg: "#E2E6ED", text: "#4A5568" };
+  const company = lead?.partner_id?.[1] || engagement.x_crm_lead_id?.[1] || "—";
+  const assignedTo = getPersonNames(engagement.x_studio_visit_by, userMap);
+  const orderValue = lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—";
+  const remarks = engagement.x_studio_remarkscomments || engagement.x_studio_remarkscommments || "—";
+  const { date: detailDate, detailLabel } = getDisplayDateMeta(engagement);
+
+  const Field = ({ label, value, color }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 14, color: color || T.textPrimary, fontWeight: 500, lineHeight: 1.45, wordBreak: "break-word" }}>
+        {value || "—"}
+      </div>
+    </div>
+  );
+
+  return (
+    <div
+      style={{
+        border: `1px solid ${T.border}`,
+        borderRadius: 12,
+        background: T.bgCard,
+        padding: "18px 20px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 18,
+        animation: "fadeIn 0.25s ease",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: T.textPrimary }}>Activity Detail</div>
+        <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 100, background: statusCfg.bg, color: statusCfg.text }}>
+          {status}
+        </span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "18px 28px" }}>
+        <Field label="Customer" value={company} />
+        <Field label="Deal Value" value={orderValue} color={orderValue !== "—" ? T.success : T.textMuted} />
+        <Field label="Engagement Type" value={engagement.x_studio_engagement_type || "—"} />
+        <Field label="Assigned To" value={assignedTo} />
+        <Field label={detailLabel} value={fmtDate(detailDate)} />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", marginBottom: 6 }}>
+          Remarks / Comments
+        </div>
+        <div style={{ fontSize: 14, color: remarks === "—" ? T.textMuted : T.textPrimary, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+          {remarks}
+        </div>
+      </div>
+
+      {lead?.id && (
+        <div>
+          <a
+            href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              padding: "8px 12px",
+              borderRadius: 8,
+              fontSize: 12,
+              fontWeight: 600,
+              background: T.accentBg,
+              color: T.accent,
+              border: `1px solid ${T.accentBdr}`,
+              textDecoration: "none",
+            }}
+          >
+            View in Odoo →
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 
 // --- Drill-down pivot card ---
@@ -107,11 +236,9 @@ function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, u
           { label: selectedPerson, onClick: () => setDrill({ level: 1, personName: selectedPerson, engagementId: null }) },
           { label: company },
         ]} />
-        {lead && (
-          <div style={{ marginTop: 12 }}>
-            <LeadCard lead={lead} onClose={() => setDrill({ level: 1, personName: selectedPerson, engagementId: null })} />
-          </div>
-        )}
+        <div style={{ marginTop: 12 }}>
+          <EngagementDetailCard engagement={selectedEng} lead={lead} userMap={userMap} />
+        </div>
       </div>
     );
   }
@@ -405,9 +532,9 @@ function WeeklyActivityCard({ engagements, leads, userMap, personKeys }) {
                           isSelected={isSelected}
                           onClick={() => setSelectedKey(isSelected ? null : rowKey)}
                         />
-                        {isSelected && lead && (
+                        {isSelected && (
                           <div style={{ marginTop: 8 }}>
-                            <LeadCard lead={lead} onClose={() => setSelectedKey(null)} />
+                            <EngagementDetailCard engagement={eng} lead={lead} userMap={userMap} />
                           </div>
                         )}
                       </div>
@@ -425,9 +552,7 @@ function WeeklyActivityCard({ engagements, leads, userMap, personKeys }) {
 
 function ActivityCard({ eng, lead, cfg, urg, isSelected, onClick }) {
   const [hovered, setHovered] = useState(false);
-  
-  const showDate = eng.x_studio_rescheduled_date || eng.x_studio_proposed_date;
-  const showDateLabel = eng.x_studio_rescheduled_date ? "Rescheduled" : "Proposed";
+  const { date: showDate, label: showDateLabel, pillBg, pillColor } = getDisplayDateMeta(eng);
 
   return (
     <div
@@ -454,7 +579,7 @@ function ActivityCard({ eng, lead, cfg, urg, isSelected, onClick }) {
         <div style={{ display: "flex", gap: 8, marginTop: 2, flexWrap: "wrap" }}>
           {showDate && (
             <span style={{ fontSize: 10, color: urg.dateColor }}>
-              <span style={{ background: eng.x_studio_rescheduled_date ? "rgba(249,115,22,0.10)" : "rgba(100,116,139,0.10)", color: eng.x_studio_rescheduled_date ? "#F97316" : "#64748B", borderRadius: 100, padding: "1px 6px", fontSize: 9, fontWeight: 600, marginRight: 3 }}>
+              <span style={{ background: pillBg, color: pillColor, borderRadius: 100, padding: "1px 6px", fontSize: 9, fontWeight: 600, marginRight: 3 }}>
                 {showDateLabel}
               </span>
               {fmtShort(showDate)}
@@ -568,9 +693,9 @@ function OverdueActivityCard({ engagements, leads, userMap, personKeys }) {
                         isSelected={isSelected}
                         onClick={() => setSelectedKey(isSelected ? null : rowKey)}
                       />
-                      {isSelected && lead && (
+                      {isSelected && (
                         <div style={{ marginTop: 8 }}>
-                          <LeadCard lead={lead} onClose={() => setSelectedKey(null)} />
+                          <EngagementDetailCard engagement={eng} lead={lead} userMap={userMap} />
                         </div>
                       )}
                     </div>

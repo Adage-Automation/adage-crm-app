@@ -180,13 +180,14 @@ function Pill({ engagement, lead, isFollowUp, empMap, isSelected, onClick }) {
   const isAnomaly = !isFollowUp && engagement.x_studio_visit_date && status === "Planned";
   const isCancelled = status === "Cancelled";
   const emoji = getTypeEmoji(engagement.x_studio_engagement_type);
+  const { date: displayDate, label: displayDateLabel } = getDisplayDateMeta(engagement);
 
   const tooltipLines = [
     `Customer: ${customerName}`,
     `Type: ${engagement.x_studio_engagement_type || "—"}`,
     lead?.expected_revenue > 0 ? `Deal: ${fmt(lead.expected_revenue)}` : null,
     `Status: ${status}`,
-    `Proposed: ${fmtDate(engagement.x_studio_proposed_date)}`,
+    `${displayDateLabel}: ${fmtDate(displayDate)}`,
     engagement.x_studio_visit_date ? `Actual: ${fmtDate(engagement.x_studio_visit_date)}` : null,
     engagement.x_studio_next_follow_up_date ? `Follow-up: ${fmtDate(engagement.x_studio_next_follow_up_date)}` : null,
     engagement.x_studio_remarkscommments ? `Remarks: ${engagement.x_studio_remarkscommments}` : null,
@@ -281,11 +282,46 @@ const fmtListDate = (iso) => {
   return `${day} ${mon}, ${dow}`;
 };
 
+const getDisplayDateMeta = (engagement) => {
+  const status = engagement?.x_studio_engagement_status;
+
+  if (status === "Rescheduled" && engagement?.x_studio_rescheduled_date) {
+    return {
+      date: engagement.x_studio_rescheduled_date,
+      label: "Rescheduled",
+      color: "#F97316",
+    };
+  }
+
+  if (engagement?.x_studio_proposed_date) {
+    return {
+      date: engagement.x_studio_proposed_date,
+      label: "Proposed",
+      color: T.textPrimary,
+    };
+  }
+
+  if (engagement?.x_studio_rescheduled_date) {
+    return {
+      date: engagement.x_studio_rescheduled_date,
+      label: "Rescheduled",
+      color: "#F97316",
+    };
+  }
+
+  return {
+    date: null,
+    label: "Proposed",
+    color: T.textMuted,
+  };
+};
+
 // ─── ListView component ───────────────────────────────────────────────────────
 function ListView({ engagements, leadMap, empMap, daySet, allPeople, selectedPeople, selectedStatuses, selectedPill, onRowClick }) {
-  // Filter: proposed_date must be in daySet + salesperson filter + status filter
+  // Filter: displayed date must be in daySet + salesperson filter + status filter
   const filtered = engagements.filter(e => {
-    if (!e.x_studio_proposed_date || !daySet.has(e.x_studio_proposed_date)) return false;
+    const { date } = getDisplayDateMeta(e);
+    if (!date || !daySet.has(date)) return false;
     if (selectedStatuses && selectedStatuses.length > 0 && !selectedStatuses.includes(e.x_studio_engagement_status)) return false;
     if (selectedPeople.length > 0) {
       const persons = Array.isArray(e.x_studio_visit_by) ? e.x_studio_visit_by : [];
@@ -295,16 +331,20 @@ function ListView({ engagements, leadMap, empMap, daySet, allPeople, selectedPeo
     return true;
   });
 
-  // Sort by proposed date ascending
-  const sorted = [...filtered].sort((a, b) =>
-    (a.x_studio_proposed_date || "").localeCompare(b.x_studio_proposed_date || "")
-  );
+  // Sort by displayed date ascending
+  const sorted = [...filtered].sort((a, b) => {
+    const aDate = getDisplayDateMeta(a).date || "";
+    const bDate = getDisplayDateMeta(b).date || "";
+    return aDate.localeCompare(bDate);
+  });
 
   // Group by "Month Year"
   const groups = {};
   const groupOrder = [];
   sorted.forEach(e => {
-    const d = new Date(e.x_studio_proposed_date);
+    const displayDate = getDisplayDateMeta(e).date;
+    if (!displayDate) return;
+    const d = new Date(displayDate);
     const key = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
     if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
     groups[key].push(e);
@@ -314,7 +354,7 @@ function ListView({ engagements, leadMap, empMap, daySet, allPeople, selectedPeo
   const personColorMap = {};
   allPeople.forEach((name, i) => { personColorMap[name] = PERSON_COLORS[i % PERSON_COLORS.length]; });
 
-  const COL_HEADERS = ["CUSTOMER","ORDER VALUE","PERSON","TYPE","STATUS","PROPOSED DATE","RESCHEDULED DATE","REMARKS"];
+  const COL_HEADERS = ["CUSTOMER","ORDER VALUE","PERSON","TYPE","STATUS","DATE TYPE","DATE","REMARKS"];
 
   if (sorted.length === 0) {
     return (
@@ -386,6 +426,7 @@ function ListView({ engagements, leadMap, empMap, daySet, allPeople, selectedPeo
 
 function ListRow({ e, lead, status, cfg, isAnomaly, personNames, personColorMap, isSelected, isLast, onClick }) {
   const [hovered, setHovered] = useState(false);
+  const { date: displayDate, label: displayDateLabel, color: displayDateColor } = getDisplayDateMeta(e);
   return (
     <div
       onClick={onClick}
@@ -447,14 +488,14 @@ function ListRow({ e, lead, status, cfg, isAnomaly, personNames, personColorMap,
         {isAnomaly && <span title="Visit done but status not updated" style={{ fontSize: 11 }}>⚠</span>}
       </div>
 
-      {/* Proposed Date */}
-      <div style={{ fontSize: 12, color: T.textPrimary, fontWeight: 500 }}>
-        {fmtListDate(e.x_studio_proposed_date)}
+      {/* Date type */}
+      <div style={{ fontSize: 12, color: displayDateColor, fontWeight: 600 }}>
+        {displayDateLabel}
       </div>
 
-      {/* Rescheduled Date — only shown for Rescheduled status */}
-      <div style={{ fontSize: 12, color: status === "Rescheduled" && e.x_studio_rescheduled_date ? "#F97316" : T.textMuted }}>
-        {status === "Rescheduled" && e.x_studio_rescheduled_date ? fmtListDate(e.x_studio_rescheduled_date) : "—"}
+      {/* Effective date */}
+      <div style={{ fontSize: 12, color: displayDateColor, fontWeight: 500 }}>
+        {fmtListDate(displayDate)}
       </div>
 
       {/* Remarks */}
@@ -648,11 +689,7 @@ export default function SwimlaneView() {
       const key = name || `Employee #${id}`;
       if (!rowMap[key]) rowMap[key] = { empId: id, items: [] };
 
-      // Show rescheduled date if status is Rescheduled, otherwise proposed date
-      const isRescheduled = eng.x_studio_engagement_status === "Rescheduled";
-      const effectiveDate = isRescheduled && eng.x_studio_rescheduled_date
-        ? eng.x_studio_rescheduled_date
-        : eng.x_studio_proposed_date;
+      const effectiveDate = getDisplayDateMeta(eng).date;
 
       if (effectiveDate && daySet.has(effectiveDate)) {
         const day = new Date(effectiveDate);
@@ -664,10 +701,11 @@ export default function SwimlaneView() {
   const allPeople = Object.keys(rowMap).sort();
   const visibleRows = allPeople.filter(n => selectedPeople.length === 0 || selectedPeople.includes(n));
 
-  // ── Summary counts (based on engagements with proposed_date in range) ────
+  // ── Summary counts (based on displayed date in range) ────────────────────
   const summary = { total: 0, Planned: 0, Completed: 0, Rescheduled: 0, Cancelled: 0, anomaly: 0 };
   engagements.forEach(e => {
-    if (!e.x_studio_proposed_date || !daySet.has(e.x_studio_proposed_date)) return;
+    const displayDate = getDisplayDateMeta(e).date;
+    if (!displayDate || !daySet.has(displayDate)) return;
     summary.total++;
     const s = e.x_studio_engagement_status;
     if (s in summary) summary[s]++;
