@@ -166,7 +166,7 @@ export function LeadCard({ lead, onClose }) {
         <Field label="Salesperson" value={lead.x_studio_assigned_salesperson?.[1]} />
         <Field label="Sales Lead" value={lead.x_studio_sales_lead?.[1]} />
         <Field label="Deal Value" value={lead.expected_revenue > 0 ? fmt(lead.expected_revenue) : null} color={T.success} />
-        <Field label="Stage" value={lead.stage_id?.[1]} />
+        <Field label="Lead Status" value={lead.x_studio_lead_status} />
         <Field label="Closing" value={closingDate || "No date"} color={closingDate ? urg.dateColor : T.textMuted} />
       </div>
 
