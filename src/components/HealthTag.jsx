@@ -1,3 +1,6 @@
+import { useEffect, useRef, useState } from "react";
+import { T } from "../constants/theme";
+
 export const HEALTH_POSITIONS = {
   Poor: 0,
   "Between Poor and Average": 16.67,
@@ -12,7 +15,7 @@ export const HEALTH_COLORS = {
   Poor: { bg: "#FEE2E2", text: "#DC2626" },
   "Between Poor and Average": { bg: "#FFEDD5", text: "#F97316" },
   Average: { bg: "#FEF9C3", text: "#CA8A04" },
-  "Between Average and Good": { bg: "#ECFCCB", text: "#65A30D" },
+  "Between Average and Good": { bg: "#FEF9C3", text: "#CA8A04" },
   Good: { bg: "#DCFCE7", text: "#16A34A" },
   "Very Good": { bg: "#DCFCE7", text: "#15803D" },
   Excellent: { bg: "#DCFCE7", text: "#166534" },
@@ -30,17 +33,23 @@ export const ROOT_LABELS = {
   Regret: { text: "Missed Opportunity", splits: true },
 };
 
-export const AGGREGATE_TOOLTIP_TEXT = `How this score is calculated:
+export const AGGREGATE_TOOLTIP_TEXT = `Each filtered lead first gets a per-record score based on:
+- expected closing timing: overdue / this week / this month / beyond
+- engagement activity: no activity / planned activity / completed activity
+- manual lost status can mark the lead as Regret
 
-Each lead's health is scored from its expected closing date and activity status:
-- Overdue / On Time (this week) / Upcoming (this month) / Upcoming (beyond)
-- combined with: no activity / activity planned / activity completed
-...producing a rating from Poor to Excellent, or Regret if the lead was
-manually marked lost.
+That per-record outcome is then mapped to a score out of 100:
+- Poor = 0
+- Between Poor and Average = 16.67
+- Average = 33.33
+- Between Average and Good = 50
+- Good = 66.67
+- Very Good = 83.33
+- Excellent = 100
 
-This card averages that rating across all currently filtered leads
-(Regret and unscored leads are excluded from the average), then shows
-the closest matching tier.`;
+Regretted leads are excluded from the average.
+
+The Overall Prospect Health card then averages the scored leads in the current filtered view and shows the closest matching tier.`;
 
 function normalizeHealth(value) {
   if (value == null) return "";
@@ -230,76 +239,172 @@ function getHealthTagReasonTooltip({ health, expectedClosingISO, hasCompleted, h
       return "Plan a sales activity to move this opportunity forward.";
     }
     if (!hasCompleted) {
-      if (horizon === "overdue") return "Expected closing date is past due. Sales activity is planned but not yet completed—follow up urgently.";
-      if (horizon === "this_week") return "Expected closing date is this week. Sales activity is planned—ensure it is completed before the due date.";
-      if (horizon === "this_month") return "Expected closing date is this month. Sales activity is planned—ensure it happens on time.";
-      return "Sales activity is planned—keep the momentum and complete the next step.";
+      if (horizon === "overdue") return "Expected closing date is past due. Sales activity is planned but not yet complete. Follow up urgently.";
+      if (horizon === "this_week") return "Expected closing date is this week. Sales activity is planned. Ensure it is completed before the due date.";
+      if (horizon === "this_month") return "Expected closing date is this month. Sales activity is planned. Ensure it happens on time.";
+      return "Sales activity is planned. Keep the momentum and complete the next step.";
     }
-    if (horizon === "overdue") return "Expected closing date is past due even though sales activity has been completed—review next steps or re-qualify.";
-    return "Sales activity has been completed—continue progressing to the next step.";
+    if (horizon === "overdue") return "Expected closing date is past due even though sales activity has been completed. Review next steps or re-qualify.";
+    return "Sales activity has been completed. Continue progressing to the next step.";
   }
 
   if (isAttemptedMissedTag) {
-    if (horizon === "overdue") return "Expected closing date is past due despite completed sales attempts—consider escalation or closing the loop.";
-    if (horizon === "this_week") return "Expected closing date is this week despite completed sales attempts—confirm next step immediately.";
-    return "Sales attempts have been made, but the opportunity is not progressing as expected—review blockers and next actions.";
+    if (horizon === "overdue") return "Expected closing date is past due despite completed sales attempts. Consider escalation or closing the loop.";
+    if (horizon === "this_week") return "Expected closing date is this week despite completed sales attempts. Confirm next step immediately.";
+    return "Sales attempts have been made, but the opportunity is not progressing as expected. Review blockers and next actions.";
   }
 
   if (isCloseToDueTag) {
-    if (horizon === "overdue") return "Expected closing date is past due—follow up immediately and confirm revised timeline.";
-    if (horizon === "this_week") return "Expected closing date is this week—ensure the next action is completed and timeline is confirmed.";
-    if (horizon === "this_month") return "Expected closing date is this month—keep follow-ups tight to prevent slipping.";
-    return "Due date is approaching—maintain cadence and confirm timeline.";
+    if (horizon === "overdue") return "Expected closing date is past due. Follow up immediately and confirm revised timeline.";
+    if (horizon === "this_week") return "Expected closing date is this week. Ensure the next action is completed and timeline is confirmed.";
+    if (horizon === "this_month") return "Expected closing date is this month. Keep follow-ups tight to prevent slipping.";
+    return "Due date is approaching. Maintain cadence and confirm timeline.";
   }
 
   if (isOnTrackTag) {
-    if (horizon === "overdue") return "Expected closing date is past due—review and update the closing date or next steps.";
-    if (!hasAny) return "Opportunity looks on track, but no activity is logged—plan a next step to maintain momentum.";
-    if (!hasCompleted) return "Opportunity is on track with planned activity—ensure it is completed as scheduled.";
-    return "Opportunity is on track with sales activity completed—continue progression.";
+    if (horizon === "overdue") return "Expected closing date is past due. Review and update the closing date or next steps.";
+    if (!hasAny) return "Opportunity looks on track, but no activity is logged. Plan a next step to maintain momentum.";
+    if (!hasCompleted) return "Opportunity is on track with planned activity. Ensure it is completed as scheduled.";
+    return "Opportunity is on track with sales activity completed. Continue progression.";
   }
 
   if (isRFQTag) {
-    return "This opportunity is trending toward RFQ—ensure RFQ conversion steps are followed up promptly.";
+    return "This opportunity is trending toward RFQ. Ensure RFQ conversion steps are followed up promptly.";
   }
 
   if (isMissedOpportunityTag) {
-    if (hasCompleted) return "Opportunity is marked as missed despite completed activity—review the loss reason and next steps.";
-    return "Opportunity is marked as missed with no completed activity—review timeline and actions taken.";
+    if (hasCompleted) return "Opportunity is marked as missed despite completed activity. Review the loss reason and next steps.";
+    return "Opportunity is marked as missed with no completed activity. Review timeline and actions taken.";
   }
 
-  if (horizon === "overdue") return "Expected closing date is past due—review next steps and update activity.";
-  if (horizon === "this_week") return "Expected closing date is this week—ensure next steps are scheduled and completed.";
-  if (horizon === "this_month") return "Expected closing date is this month—keep activity cadence to avoid slippage.";
-  if (horizon === "later") return "Expected closing date is upcoming—maintain momentum with planned activities.";
+  if (horizon === "overdue") return "Expected closing date is past due. Review next steps and update activity.";
+  if (horizon === "this_week") return "Expected closing date is this week. Ensure next steps are scheduled and completed.";
+  if (horizon === "this_month") return "Expected closing date is this month. Keep activity cadence to avoid slippage.";
+  if (horizon === "later") return "Expected closing date is upcoming. Maintain momentum with planned activities.";
   return "Review expected closing date and activity to understand the current health tag.";
 }
 
 export default function HealthTag({ health, hasCompleted, hasAnyActivity: hasAnyActivityFlag, expectedClosingISO }) {
+  const [showInfo, setShowInfo] = useState(false);
+  const [hoveringInfo, setHoveringInfo] = useState(false);
+  const infoRef = useRef(null);
   const meta = getHealthTagMeta(health, hasCompleted, hasAnyActivityFlag);
   const tooltip = getHealthTagReasonTooltip({ health, expectedClosingISO, hasCompleted, hasAnyActivityFlag });
 
+  useEffect(() => {
+    if (!showInfo) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (infoRef.current && !infoRef.current.contains(event.target)) {
+        setShowInfo(false);
+      }
+    };
+    const handleEscape = (event) => {
+      if (event.key === "Escape") setShowInfo(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [showInfo]);
+
   return (
     <span
-      title={tooltip}
       style={{
         display: "inline-flex",
         alignItems: "center",
+        gap: 5,
         maxWidth: "100%",
-        padding: "3px 9px",
-        borderRadius: 999,
-        border: `1px solid ${meta.border}`,
-        background: meta.bg,
-        color: meta.textColor,
-        fontSize: 10,
-        fontWeight: 700,
-        lineHeight: 1.25,
-        whiteSpace: "normal",
-        overflowWrap: "anywhere",
-        cursor: "help",
       }}
     >
-      {meta.text}
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          minWidth: 0,
+          maxWidth: "100%",
+          padding: "3px 9px",
+          borderRadius: 999,
+          border: `1px solid ${meta.border}`,
+          background: meta.bg,
+          color: meta.textColor,
+          fontSize: 10,
+          fontWeight: 700,
+          lineHeight: 1.25,
+          whiteSpace: "normal",
+          overflowWrap: "anywhere",
+        }}
+      >
+        {meta.text}
+      </span>
+      <span
+        ref={infoRef}
+        onMouseEnter={() => {
+          setHoveringInfo(true);
+          setShowInfo(true);
+        }}
+        onMouseLeave={() => {
+          setHoveringInfo(false);
+          setShowInfo(false);
+        }}
+        style={{
+          position: "relative",
+          display: "inline-flex",
+          alignItems: "center",
+          flexShrink: 0,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setShowInfo(true)}
+          style={{
+            background: "none",
+            border: "none",
+            padding: 0,
+            margin: 0,
+            fontSize: 10,
+            fontWeight: 700,
+            lineHeight: 1.25,
+            fontFamily: "inherit",
+            color: hoveringInfo || showInfo ? T.accent : T.textMuted,
+            cursor: "pointer",
+            transition: "color 0.15s ease",
+          }}
+        >
+          ?
+        </button>
+        {showInfo && (
+          <div
+            style={{
+              position: "absolute",
+              top: "calc(100% + 6px)",
+              left: 0,
+              width: 240,
+              maxWidth: "min(240px, calc(100vw - 40px))",
+              background: "#FFFFFF",
+              border: "1px solid #E5E7EB",
+              borderRadius: 10,
+              boxShadow: "0 10px 24px rgba(15, 23, 42, 0.14)",
+              padding: "10px 12px",
+              zIndex: 40,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                color: "#374151",
+                lineHeight: 1.45,
+                whiteSpace: "normal",
+              }}
+            >
+              {tooltip}
+            </div>
+          </div>
+        )}
+      </span>
     </span>
   );
 }

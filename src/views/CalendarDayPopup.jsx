@@ -5,6 +5,26 @@ import { fmt, fmtDate, getPersonNames } from "../lib/format";
 const getDisplayDateMeta = (engagement) => {
   const status = engagement?.x_studio_engagement_status;
 
+  if (status === "Completed" && engagement?.x_studio_completed_date) {
+    return {
+      date: engagement.x_studio_completed_date,
+      label: "Completed",
+      detailLabel: "Completed Date",
+      color: T.success,
+      bg: T.successBg,
+    };
+  }
+
+  if (status === "Cancelled") {
+    return {
+      date: null,
+      label: null,
+      detailLabel: null,
+      color: T.textMuted,
+      bg: T.bgInput,
+    };
+  }
+
   if (status === "Rescheduled" && engagement?.x_studio_rescheduled_date) {
     return {
       date: engagement.x_studio_rescheduled_date,
@@ -133,12 +153,11 @@ function DetailView({ e, leads, userMap, statusColors, statusBgs, onBack }) {
           <Field label="Engagement Type" value={e.x_studio_engagement_type || "—"} />
           <Field label="Engagement With" value={e.x_studio_engagement_with || "—"} />
           <Field label="Assigned To" value={assignedTo} />
-          <Field label={detailLabel} value={fmtDate(detailDate)} />
+          {detailLabel && <Field label={detailLabel} value={fmtDate(detailDate)} />}
           <Field label="Region" value={lead?.x_studio_responsible_region_1 || "—"} color={REGION_COLORS[lead?.x_studio_responsible_region_1] || T.textPrimary} />
           <Field label="Opportunity" value={lead?.name || e.x_crm_lead_id?.[1] || "—"} />
           <Field label="Industry" value={lead?.x_studio_industry_type || "—"} />
           <Field label="SBU" value={lead?.x_studio_sbu || "—"} />
-          <Field label="Actual Visit Date" value={fmtDate(e.x_studio_visit_date)} />
           <Field label="Next Follow-up" value={fmtDate(e.x_studio_next_follow_up_date)} />
         </div>
 

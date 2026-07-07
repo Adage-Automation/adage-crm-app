@@ -32,7 +32,7 @@ const fmtShort = (iso) => {
   if (!iso) return "—";
   const [y, m, d] = iso.split("T")[0].split("-").map(Number);
   const dt = new Date(y, m - 1, d);
-  return `${dt.getDate()} ${MONTHS[dt.getMonth()]}, ${DAYS[dt.getDay()]}`;
+  return `${dt.getDate()} ${MONTHS[dt.getMonth()]} ${dt.getFullYear()}, ${DAYS[dt.getDay()]}`;
 };
 
 const getUrgency = (isoDate, status) => {
@@ -66,6 +66,26 @@ const inWeek = (iso, mon, sun) => {
 
 const getDisplayDateMeta = (engagement) => {
   const status = engagement?.x_studio_engagement_status;
+
+  if (status === "Completed" && engagement?.x_studio_completed_date) {
+    return {
+      date: engagement.x_studio_completed_date,
+      label: "Completed",
+      detailLabel: "Completed Date",
+      pillBg: T.successBg,
+      pillColor: T.success,
+    };
+  }
+
+  if (status === "Cancelled") {
+    return {
+      date: null,
+      label: null,
+      detailLabel: null,
+      pillBg: T.bgInput,
+      pillColor: T.textMuted,
+    };
+  }
 
   if (status === "Rescheduled" && engagement?.x_studio_rescheduled_date) {
     return {
@@ -111,6 +131,7 @@ function EngagementDetailCard({ engagement, lead, userMap }) {
 
   const status = engagement.x_studio_engagement_status || "Unknown";
   const statusCfg = STATUS_CONFIG[status] || { bg: "#E2E6ED", text: "#4A5568" };
+  const odooLeadId = lead?.id || engagement?.x_crm_lead_id?.[0];
   const company = lead?.partner_id?.[1] || engagement.x_crm_lead_id?.[1] || "—";
   const assignedTo = getPersonNames(engagement.x_studio_visit_by, userMap);
   const orderValue = lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—";
@@ -154,7 +175,7 @@ function EngagementDetailCard({ engagement, lead, userMap }) {
         <Field label="Engagement Type" value={engagement.x_studio_engagement_type || "—"} />
         <Field label="Engagement With" value={engagement.x_studio_engagement_with || "—"} />
         <Field label="Assigned To" value={assignedTo} />
-        <Field label={detailLabel} value={fmtDate(detailDate)} />
+        {detailLabel && <Field label={detailLabel} value={fmtDate(detailDate)} />}
       </div>
 
       <div>
@@ -166,10 +187,10 @@ function EngagementDetailCard({ engagement, lead, userMap }) {
         </div>
       </div>
 
-      {lead?.id && (
+      {odooLeadId && (
         <div>
           <a
-            href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+            href={`https://crm-adage-9.odoo.com/odoo/crm/${odooLeadId}`}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -373,7 +394,7 @@ function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, u
                   const lead   = leadMap[eng.x_crm_lead_id?.[0]];
                   const status = eng.x_studio_engagement_status || "Unknown";
                   const cfg    = STATUS_CONFIG[status] || { bg: "#E2E6ED", text: "#4A5568" };
-                  const effDate = eng.x_studio_rescheduled_date || eng.x_studio_proposed_date;
+                  const { date: effDate } = getDisplayDateMeta(eng);
                   const urg    = URGENCY[getUrgency(effDate, status)];
                   return (
                     <div key={eng.id}
@@ -383,6 +404,18 @@ function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, u
                       onMouseLeave={e => e.currentTarget.style.background = T.bgCard}>
                       <span style={{ fontSize: 13 }}>{getEmoji(eng.x_studio_engagement_type)}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            marginBottom: 2,
+                            fontSize: 9,
+                            fontWeight: 700,
+                            letterSpacing: "0.3px",
+                            color: cfg.bg,
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          {status}
+                        </div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: T.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1] || "—"}
                         </div>
@@ -391,9 +424,8 @@ function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, u
                             With: {eng.x_studio_engagement_with}
                           </div>
                         )}
-                        <div style={{ fontSize: 11, color: urg.dateColor }}>{fmtShort(effDate)}</div>
+                        {effDate && <div style={{ fontSize: 11, color: urg.dateColor }}>{fmtShort(effDate)}</div>}
                       </div>
-                      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: cfg.bg, color: cfg.text, flexShrink: 0 }}>{status}</span>
                       <span style={{ fontSize: 11, color: T.textMuted, flexShrink: 0 }}>→</span>
                     </div>
                   );
@@ -562,6 +594,8 @@ function WeeklyActivityCard({ engagements, leads, userMap, personKeys, completed
 function ActivityCard({ eng, lead, hasCompleted, hasAnyActivity: hasAnyActivityFlag, cfg, urg, isSelected, onClick }) {
   const [hovered, setHovered] = useState(false);
   const { date: showDate, label: showDateLabel, pillBg, pillColor } = getDisplayDateMeta(eng);
+  const odooLeadId = lead?.id || eng?.x_crm_lead_id?.[0];
+  const statusLabel = eng.x_studio_engagement_status || "—";
 
   return (
     <div
@@ -582,9 +616,42 @@ function ActivityCard({ eng, lead, hasCompleted, hasAnyActivity: hasAnyActivityF
 
       {/* Company + dates */}
       <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            marginBottom: 2,
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: "0.3px",
+            color: cfg.bg,
+            textTransform: "uppercase",
+          }}
+        >
+          {statusLabel}
+        </div>
         <div style={{ fontSize: 12, fontWeight: 600, color: T.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1] || "—"}
         </div>
+        {odooLeadId && (
+          <a
+            href={`https://crm-adage-9.odoo.com/odoo/crm/${odooLeadId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              marginTop: 4,
+              fontSize: 11,
+              fontWeight: 700,
+              color: "#02818A",
+              textDecoration: "none",
+              opacity: 1,
+            }}
+          >
+            View in Odoo ↗
+          </a>
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, minWidth: 0 }}>
           <HealthTag
             health={lead?.x_studio_prospect_health}
@@ -611,9 +678,6 @@ function ActivityCard({ eng, lead, hasCompleted, hasAnyActivity: hasAnyActivityF
           )}
         </div>
       </div>
-
-      {/* Status pill */}
-      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: cfg.bg, color: cfg.text, flexShrink: 0 }}>{eng.x_studio_engagement_status || "—"}</span>
     </div>
   );
 }

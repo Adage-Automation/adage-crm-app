@@ -61,18 +61,21 @@ export default function App() {
         }),
         fetchOdoo("x_crm_lead_line_6bc5b", "search_read", [[]], {
           fields: ["x_name","x_crm_lead_id","x_studio_engagement_type","x_studio_proposed_date","x_studio_engagement_status","x_studio_visit_by",
-            "x_studio_remarkscommments","x_studio_rescheduled_date","x_studio_engagement_with"],
+            "x_studio_remarkscommments","x_studio_rescheduled_date","x_studio_engagement_with","x_studio_completed_date"],
           limit: 500,
         }),
         fetchOdoo("crm.stage", "search_read", [[]], { fields: ["name","sequence"], order: "sequence asc" }),
-        fetchOdoo("crm.lead", "search_read", [[["type","=","opportunity"]]], {
+        fetchOdoo("crm.lead", "search_read", [[["type","=","opportunity"],["active","=",true]]], {
           fields: ["stage_id","expected_revenue","active"], limit: 500,
-          context: { lang: "en_US", active_test: false },
+          context: { lang: "en_US" },
         }),
       ]);
 
+      const activeLeadIds = new Set((leads || []).map((lead) => lead.id).filter(Boolean));
+      const visibleEngagements = (engagements || []).filter((engagement) => activeLeadIds.has(engagement?.x_crm_lead_id?.[0]));
+
       const ids = new Set();
-      (engagements || []).forEach(e => {
+      visibleEngagements.forEach(e => {
         const raw = Array.isArray(e.x_studio_visit_by) ? e.x_studio_visit_by : [e.x_studio_visit_by];
         raw.forEach(p => {
           if (!p && p !== 0) return;
@@ -91,7 +94,7 @@ export default function App() {
       }
 
       setUserMap(map);
-      setData({ leads: leads || [], engagements: engagements || [], stages: stages || [], closedLeads: closedLeads || [] });
+      setData({ leads: leads || [], engagements: visibleEngagements, stages: stages || [], closedLeads: closedLeads || [] });
     } catch (e) {
       setError(e.message);
     } finally {

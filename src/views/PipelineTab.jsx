@@ -9,6 +9,7 @@ import HealthTag, {
   getClosestHealthTier,
   hasAnyActivity,
   hasCompletedActivity,
+  getHealthTagMeta,
   HEALTH_POSITIONS,
 } from "../components/HealthTag";
 
@@ -185,6 +186,37 @@ const STATUS_PILL = {
 };
 const getPill = (val) => STATUS_PILL[val] || { bg: "#F3F4F6", text: "#374151" };
 
+const LABEL_GROUP_ORDER = [
+  "Missed Opportunity without any action",
+  "Missed Opportunity",
+  "Missed Opportunity despite Sales attempts",
+  "Pending Sales Action",
+  "Close to Due Date",
+  "Prospect On Track",
+  "Prospect Resulted in RFQ",
+  "Not yet scored",
+  "ERROR: No Expected Closing Date",
+];
+
+const LABEL_GROUP_COLORS = {
+  "Missed Opportunity without any action": "#DC2626",
+  "Missed Opportunity": "#DC2626",
+  "Missed Opportunity despite Sales attempts": "#F97316",
+  "Pending Sales Action": "#CA8A04",
+  "Close to Due Date": "#CA8A04",
+  "Prospect On Track": "#16A34A",
+  "Prospect Resulted in RFQ": "#166534",
+  "Not yet scored": "#6B7280",
+  "ERROR: No Expected Closing Date": "#6B7280",
+};
+
+function getLeadLabelMeta(lead, engagementsByLead) {
+  const leadEngagements = engagementsByLead[lead.id] || [];
+  const hasCompleted = hasCompletedActivity(leadEngagements);
+  const hasAny = hasAnyActivity(leadEngagements);
+  return getHealthTagMeta(lead.x_studio_prospect_health, hasCompleted, hasAny);
+}
+
 // ─── MultiSelect (same pattern as VisitsTab) ──────────────────────────────────
 function MultiSelect({ label, options, selected, onChange, searchable = false, searchPlaceholder = "Search..." }) {
   const [open, setOpen] = useState(false);
@@ -359,10 +391,28 @@ function formatSimpleDate(iso) {
 
 function getEngagementDisplayDateMeta(engagement) {
   const status = engagement?.x_studio_engagement_status;
+  if (status === "Completed" && engagement?.x_studio_completed_date) {
+    return {
+      date: engagement.x_studio_completed_date,
+      label: "Completed",
+      detailLabel: "Completed Date",
+      color: T.success,
+      bg: T.successBg,
+    };
+  }
+  if (status === "Cancelled") {
+    return {
+      date: null,
+      label: null,
+      detailLabel: null,
+      color: T.textMuted,
+      bg: T.bgInput,
+    };
+  }
   if (status === "Rescheduled" && engagement?.x_studio_rescheduled_date) {
     return {
       date: engagement.x_studio_rescheduled_date,
-      label: "Rescheduled",
+      // label: "Rescheduled",
       detailLabel: "Rescheduled Date",
       color: "#F59E0B",
       bg: "rgba(245,158,11,0.14)",
@@ -458,17 +508,19 @@ function ActivityDetailModal({ engagement, lead, userMap, onClose }) {
           <Field label="Region" value={lead?.x_studio_responsible_region_1 || "—"} color={REGION_COLORS[lead?.x_studio_responsible_region_1] || T.textPrimary} />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "18px 24px", marginBottom: 16 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>{detailLabel}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              {datePillLabel === "Rescheduled" && (
-                <span className="pill" style={{ background: datePillBg, color: datePillColor }}>{datePillLabel}</span>
-              )}
-              <span style={{ fontSize: 14, color: datePillColor, fontWeight: 600 }}>{formatSimpleDate(detailDate)}</span>
+        {detailLabel && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "18px 24px", marginBottom: 16 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>{detailLabel}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                {datePillLabel === "Rescheduled" && (
+                  <span className="pill" style={{ background: datePillBg, color: datePillColor }}>{datePillLabel}</span>
+                )}
+                <span style={{ fontSize: 14, color: datePillColor, fontWeight: 600 }}>{formatSimpleDate(detailDate)}</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 14 }}>
           <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", marginBottom: 6 }}>Remarks / Comments</div>
@@ -569,7 +621,7 @@ export function LeadCard({ lead, onClose, uniform = false }) {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 10px" }}>
-          <Field label="Salesperson" value={lead.x_studio_assigned_salesperson?.[1]} />
+          <Field label="Assigned Salesperson" value={lead.x_studio_assigned_salesperson?.[1]} />
           <Field label="Deal Value" value={lead.expected_revenue > 0 ? fmt(lead.expected_revenue) : null} color={T.success} />
           <Field label="Closing" value={closingDate || "No date"} color={closingDate ? urg.dateColor : T.textMuted} />
           <Field label="Sales Lead" value={lead.x_studio_sales_lead?.[1]} />
@@ -653,7 +705,7 @@ export function LeadCard({ lead, onClose, uniform = false }) {
         <Field label="Company" value={lead.partner_id?.[1] || lead.partner_name} />
 
         <div style={{ display: "grid", gridTemplateColumns: onClose ? "repeat(auto-fit, minmax(140px, 1fr))" : "1fr 1fr", gap: "6px 10px" }}>
-          <Field label="Salesperson" value={lead.x_studio_assigned_salesperson?.[1]} />
+          <Field label="Assigned Salesperson" value={lead.x_studio_assigned_salesperson?.[1]} />
           <Field label="Sales Lead" value={lead.x_studio_sales_lead?.[1]} />
           <Field label="Deal Value" value={lead.expected_revenue > 0 ? fmt(lead.expected_revenue) : null} color={T.success} />
           <Field label="Lead Status" value={lead.x_studio_lead_status} />
@@ -864,7 +916,7 @@ function RegionDonut({ leads, onSegmentClick, activeKey }) {
 function PersonDonut({ leads, onSegmentClick, activeKey }) {
   const byPerson = {};
   leads.forEach(l => {
-    const k = l.x_studio_assigned_salesperson?.[1] || l.user_id?.[1] || "Unassigned";
+    const k = l.x_studio_assigned_salesperson?.[1] || "Unassigned";
     if (!byPerson[k]) byPerson[k] = { rev: 0, count: 0, color: null };
     byPerson[k].rev += l.expected_revenue || 0;
     byPerson[k].count += 1;
@@ -876,7 +928,35 @@ function PersonDonut({ leads, onSegmentClick, activeKey }) {
   const colorMap = {};
   keys.forEach((k, i) => { colorMap[k] = PERSON_COLORS[i % PERSON_COLORS.length]; });
   const segments = entries.map(([key, d]) => ({ key, ...d, color: colorMap[key] }));
-  return <InteractiveDonut title="Revenue by Assigned Person" segments={segments} total={total} centerLabel="Pipeline" onSegmentClick={onSegmentClick} activeKey={activeKey} />;
+  return <InteractiveDonut title="Revenue by Assigned Salesperson" segments={segments} total={total} centerLabel="Pipeline" onSegmentClick={onSegmentClick} activeKey={activeKey} />;
+}
+
+function LabelDonut({ leads, engagementsByLead, onSegmentClick, activeKey }) {
+  const byLabel = {};
+  leads.forEach((lead) => {
+    const meta = getLeadLabelMeta(lead, engagementsByLead);
+    const key = meta.text || "Not yet scored";
+    if (!byLabel[key]) {
+      byLabel[key] = {
+        rev: 0,
+        count: 0,
+        color: LABEL_GROUP_COLORS[key] || meta.textColor || T.textMuted,
+      };
+    }
+    byLabel[key].rev += lead.expected_revenue || 0;
+    byLabel[key].count += 1;
+  });
+
+  const entries = Object.entries(byLabel)
+    .filter(([, d]) => d.rev > 0 || d.count > 0)
+    .sort((a, b) => {
+      const ia = LABEL_GROUP_ORDER.indexOf(a[0]);
+      const ib = LABEL_GROUP_ORDER.indexOf(b[0]);
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib) || a[0].localeCompare(b[0]);
+    });
+  const total = entries.reduce((s, [, d]) => s + d.rev, 0) || 1;
+  const segments = entries.map(([key, d]) => ({ key, ...d }));
+  return <InteractiveDonut title="Revenue by Label" segments={segments} total={total} centerLabel="Pipeline" onSegmentClick={onSegmentClick} activeKey={activeKey} legendMaxHeight={136} />;
 }
 
 function CustomerDonut({ leads, onSegmentClick, activeKey }) {
@@ -983,39 +1063,27 @@ function MonthlyClosings({ leads, selectedMonth, onBarClick }) {
 }
 
 function OverallProspectHealthCard({ leads, engagementsByLead }) {
-  const fmtBucketDate = (iso) => {
-    if (!iso) return "—";
-    const parts = String(iso).split("T")[0].split("-").map(Number);
-    if (parts.length !== 3) return "—";
-    const [, m, d] = parts;
-    if (!m || !d) return "—";
-    const dd = String(d).padStart(2, "0");
-    const mm = String(m).padStart(2, "0");
-    const yyyy = String(parts[0]);
-    return `${dd}/${mm}/${yyyy}`;
-  };
+  const [showInfo, setShowInfo] = useState(false);
+  const [hoveringInfo, setHoveringInfo] = useState(false);
+  const infoRef = useRef(null);
 
-  const getBucketRecordLabel = (lead) => {
-    const company = lead?.partner_id?.[1] || lead?.partner_name || "—";
-    const dt = fmtBucketDate(lead?.x_studio_expected_closing);
-    return `${lead?.name || "—"} ${dt !== "—" ? `(${dt})` : ""} — ${company}`;
-  };
-
-  const buildTooltipText = (bucketTier, bucketRecords, needsAction, attempted) => {
-    const maxItems = 5;
-    const lines = [];
-    lines.push(AGGREGATE_TOOLTIP_TEXT);
-    lines.push("");
-    lines.push("Records in this tier that need attention:");
-    lines.push(`No action taken (${needsAction.length}):`);
-    needsAction.slice(0, maxItems).forEach((lead) => lines.push(`  • ${getBucketRecordLabel(lead)}`));
-    if (needsAction.length > maxItems) lines.push(`  +${needsAction.length - maxItems} more`);
-    lines.push("");
-    lines.push(`Attempted, still pending (${attempted.length}):`);
-    attempted.slice(0, maxItems).forEach((lead) => lines.push(`  • ${getBucketRecordLabel(lead)}`));
-    if (attempted.length > maxItems) lines.push(`  +${attempted.length - maxItems} more`);
-    return lines.join("\n");
-  };
+  useEffect(() => {
+    if (!showInfo) return undefined;
+    const handlePointerDown = (event) => {
+      if (infoRef.current && !infoRef.current.contains(event.target)) {
+        setShowInfo(false);
+      }
+    };
+    const handleEscape = (event) => {
+      if (event.key === "Escape") setShowInfo(false);
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [showInfo]);
 
   const scoredEntries = leads
     .map((lead) => {
@@ -1031,19 +1099,73 @@ function OverallProspectHealthCard({ leads, engagementsByLead }) {
     : null;
 
   const averageLabel = averagePosition == null ? null : getClosestHealthTier(averagePosition);
-  const bucketRecords = averageLabel
-    ? leads.filter((lead) => String(lead?.x_studio_prospect_health || "").trim() === averageLabel)
-    : [];
-  const needsAction = bucketRecords.filter((lead) => !hasCompletedActivity(engagementsByLead[lead.id] || []));
-  const attempted = bucketRecords.filter((lead) => hasCompletedActivity(engagementsByLead[lead.id] || []));
-  const tooltipText = averageLabel
-    ? buildTooltipText(averageLabel, bucketRecords, needsAction, attempted)
-    : AGGREGATE_TOOLTIP_TEXT;
+  const tooltipText = AGGREGATE_TOOLTIP_TEXT;
 
   return (
     <div className="card" style={{ padding: "14px 14px", display: "flex", flexDirection: "column", minWidth: 0 }}>
-      <div style={{ fontSize: 10, color: T.textMuted, letterSpacing: "0.8px", textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>
-        Overall Prospect Health
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6, marginBottom: 12, position: "relative" }}>
+        <div style={{ fontSize: 9, color: T.textMuted, letterSpacing: "0.55px", textTransform: "uppercase", fontWeight: 700, whiteSpace: "nowrap" }}>
+          Overall Prospect Health
+        </div>
+        <div
+          ref={infoRef}
+          onMouseEnter={() => {
+            setHoveringInfo(true);
+            setShowInfo(true);
+          }}
+          onMouseLeave={() => {
+            setHoveringInfo(false);
+            setShowInfo(false);
+          }}
+          style={{ position: "relative", flexShrink: 0 }}
+        >
+          <button
+            type="button"
+            onClick={() => setShowInfo(true)}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              margin: 0,
+              display: "block",
+              alignSelf: "flex-start",
+              verticalAlign: "top",
+              fontSize: 8,
+              color: showInfo || hoveringInfo ? T.accent : T.textMuted,
+              lineHeight: 1,
+              cursor: "pointer",
+              fontFamily: "inherit",
+              whiteSpace: "nowrap",
+              transition: "color 0.15s ease",
+            }}
+          >
+            How this is calculated?
+          </button>
+          {showInfo && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 8px)",
+                right: 0,
+                width: 320,
+                maxWidth: "min(320px, calc(100vw - 40px))",
+                background: T.bgCard,
+                border: `1px solid ${T.border}`,
+                borderRadius: 12,
+                boxShadow: "0 12px 28px rgba(15, 23, 42, 0.16)",
+                padding: "12px 14px",
+                zIndex: 30,
+              }}
+            >
+              <div style={{ fontSize: 10, fontWeight: 800, color: T.textPrimary, marginBottom: 8, letterSpacing: "0.4px", textTransform: "uppercase" }}>
+                How this is calculated
+              </div>
+              <div style={{ whiteSpace: "pre-wrap", fontSize: 11, color: T.textSecondary, lineHeight: 1.45 }}>
+                {tooltipText}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {averagePosition == null ? (
@@ -1061,13 +1183,12 @@ function OverallProspectHealthCard({ leads, engagementsByLead }) {
       ) : (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flex: 1, minHeight: 112, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
-            <div title={tooltipText} style={{ cursor: "help" }}>
+            <div>
               <HealthSpeedometer value={averageLabel} position={averagePosition} size={76} fallbackLabel={averageLabel} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
               <div
-                title={tooltipText}
-                style={{ fontSize: 15, fontWeight: 800, color: T.textPrimary, lineHeight: 1.15, cursor: "help", overflowWrap: "anywhere" }}
+                style={{ fontSize: 15, fontWeight: 800, color: T.textPrimary, lineHeight: 1.15, overflowWrap: "anywhere" }}
               >
                 {averageLabel}
               </div>
@@ -1090,12 +1211,12 @@ function OverallProspectHealthCard({ leads, engagementsByLead }) {
 
 // ─── List row ─────────────────────────────────────────────────────────────────
 const LIST_GRID_COLUMNS = "2fr 120px 110px 100px 130px 110px minmax(190px, 1.25fr)";
-const LIST_HEADER_LABELS = ["Opportunity Name", "Closing & Status", "Expected Value", "Region", "Salesperson", "Project Type", "Activities"];
+const LIST_HEADER_LABELS = ["Opportunity Name", "Closing & Status", "Expected Value", "Region", "Assigned Salesperson", "Project Type", "Activities"];
 
 function ListRow({ lead, activity, userMap, onActivityClick, healthHasCompleted, healthHasAnyActivity }) {
   const [hovered, setHovered] = useState(false);
   const regionColor = REGION_COLORS[lead.x_studio_responsible_region_1] || T.textMuted;
-  const salesperson = lead.user_id?.[1] || lead.x_studio_assigned_salesperson?.[1] || "—";
+  const salesperson = lead.x_studio_assigned_salesperson?.[1] || "—";
   const company = lead.partner_id?.[1] || lead.partner_name || "—";
   const closingLabel = formatClosingCellDate(lead.x_studio_expected_closing);
   const projectType = lead.x_studio_project_background || "—";
@@ -1226,7 +1347,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
   });
   const [periodFilter, setPeriodFilter] = useState(defaultPeriod);
   const [selectedMonth, setSelectedMonth] = useState(null); // "YYYY-MM" drill-down from bar chart
-  const [donutFilter, setDonutFilter] = useState(null); // { kind: "lead_status" | "region" | "person" | "customer", key: string }
+  const [donutFilter, setDonutFilter] = useState(null); // { kind: "lead_status" | "region" | "person" | "customer" | "label", key: string }
   const [filterProjectType, setFilterProjectType] = useState(null); // drill from GB donut
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedGroups, setExpandedGroups] = useState({});
@@ -1234,7 +1355,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
 
   // Dropdown options
   const regionOptions = useMemo(() => [...new Set(leads.map(l => l.x_studio_responsible_region_1).filter(Boolean))].sort(), [leads]);
-  const personOptions = useMemo(() => [...new Set(leads.map(l => (l.x_studio_assigned_salesperson?.[1] || l.user_id?.[1])).filter(Boolean))].sort(), [leads]);
+  const personOptions = useMemo(() => [...new Set(leads.map(l => l.x_studio_assigned_salesperson?.[1]).filter(Boolean))].sort(), [leads]);
   const customerOptions = useMemo(
     () => [...new Set(leads.map((l) => l.partner_id?.[1] || l.partner_name).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [leads]
@@ -1300,7 +1421,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
     return leads.filter(l => {
       if (filterRegion.length > 0 && !filterRegion.includes(l.x_studio_responsible_region_1)) return false;
       if (statusFilter !== "All Statuses" && l.x_studio_lead_status !== statusFilter) return false;
-      if (filterPerson.length > 0 && !filterPerson.includes(l.x_studio_assigned_salesperson?.[1] || l.user_id?.[1])) return false;
+      if (filterPerson.length > 0 && !filterPerson.includes(l.x_studio_assigned_salesperson?.[1])) return false;
       if (filterCustomer.length > 0 && !filterCustomer.includes(l.partner_id?.[1] || l.partner_name)) return false;
       if (dateFrom || dateTo) {
         const d = parseISODate(l.x_studio_expected_closing);
@@ -1328,7 +1449,11 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
         if (val !== donutFilter.key) return false;
       }
       if (donutFilter?.kind === "person") {
-        const val = l.x_studio_assigned_salesperson?.[1] || l.user_id?.[1] || "Unassigned";
+        const val = l.x_studio_assigned_salesperson?.[1] || "Unassigned";
+        if (val !== donutFilter.key) return false;
+      }
+      if (donutFilter?.kind === "label") {
+        const val = getLeadLabelMeta(l, engagementsByLead).text || "Not yet scored";
         if (val !== donutFilter.key) return false;
       }
       if (donutFilter?.kind === "customer") {
@@ -1365,6 +1490,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
       let key;
       if (groupBy === "region") key = l.x_studio_responsible_region_1 || "No Region";
       else if (groupBy === "person") key = l.x_studio_assigned_salesperson?.[1] || "Unassigned";
+      else if (groupBy === "label") key = getLeadLabelMeta(l, engagementsByLead).text || "Not yet scored";
       else if (groupBy === "customer") key = l.partner_id?.[1] || l.partner_name || "No Customer";
       else if (groupBy === "status") key = l.x_studio_lead_status || "No Status";
       else key = l.x_studio_lead_status || "No Status";
@@ -1391,13 +1517,19 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
       const ib = STATUS_ORDER.indexOf(b);
       return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib) || a.localeCompare(b);
     });
+    else if (groupBy === "label") keys.sort((a, b) => {
+      const ia = LABEL_GROUP_ORDER.indexOf(a);
+      const ib = LABEL_GROUP_ORDER.indexOf(b);
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib) || a.localeCompare(b);
+    });
     else keys.sort();
     return keys.map((key, i) => ({ key, leads: map[key], idx: i }));
-  }, [filteredLeads, groupBy]);
+  }, [filteredLeads, groupBy, engagementsByLead]);
 
   const groupColor = (key, idx) => {
     if (groupBy === "region") return REGION_COLORS[key] || T.accent;
     if (groupBy === "person") return PERSON_COLORS[idx % PERSON_COLORS.length];
+    if (groupBy === "label") return LABEL_GROUP_COLORS[key] || T.accent;
     if (groupBy === "customer") return PERSON_COLORS[idx % PERSON_COLORS.length];
     if (groupBy === "status") return getPill(key).text;
     return getPill(key).text;
@@ -1562,7 +1694,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
         />
         <div style={{ width: 1, height: 20, background: "#e5e7eb", flexShrink: 0 }} />
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-          {[["status", "By Lead Status"], ["region", "By Region"], ["person", "By Person"], ["customer", "By Customer"]].map(([val, lbl]) => (
+          {[["status", "By Lead Status"], ["region", "By Region"], ["person", "By Person"], ["label", "By Label"], ["customer", "By Customer"]].map(([val, lbl]) => (
             <button
               key={val}
               onClick={() => setGroupBy(val)}
@@ -1677,6 +1809,16 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
               handleSetViewMode("list");
             }}
           />
+        ) : groupBy === "label" ? (
+          <LabelDonut
+            leads={filteredLeads}
+            engagementsByLead={engagementsByLead}
+            activeKey={donutFilter?.kind === "label" ? donutFilter.key : null}
+            onSegmentClick={(key) => {
+              setDonutFilter(prev => (prev?.kind === "label" && prev.key === key) ? null : ({ kind: "label", key }));
+              handleSetViewMode("list");
+            }}
+          />
         ) : (
           <CustomerDonut
             leads={filteredLeads}
@@ -1725,7 +1867,13 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
           )}
           {donutFilter?.kind === "person" && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100, background: `${T.accent}18`, color: T.accent, border: `1px solid ${T.accent}40` }}>
-              Person: {donutFilter.key}
+              Assigned Salesperson: {donutFilter.key}
+              <button onClick={() => setDonutFilter(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "inherit", lineHeight: 1, padding: 0, marginLeft: 2 }}>×</button>
+            </span>
+          )}
+          {donutFilter?.kind === "label" && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100, background: `${(LABEL_GROUP_COLORS[donutFilter.key] || T.accent)}18`, color: LABEL_GROUP_COLORS[donutFilter.key] || T.accent, border: `1px solid ${(LABEL_GROUP_COLORS[donutFilter.key] || T.accent)}40` }}>
+              Label: {donutFilter.key}
               <button onClick={() => setDonutFilter(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "inherit", lineHeight: 1, padding: 0, marginLeft: 2 }}>×</button>
             </span>
           )}

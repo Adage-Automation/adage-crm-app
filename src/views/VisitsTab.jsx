@@ -1,8 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { T } from "../constants/theme";
-import { REGION_COLORS, PERSON_COLORS } from "../constants/colors";
-import { fmt, fmtDate, getPersonName } from "../lib/format";
-import { LeadCard } from "./PipelineTab";
+import { REGION_COLORS } from "../constants/colors";
+import { fmt, getPersonName } from "../lib/format";
 
 // ---- Local constants ----
 const STATUS_CONFIG = {
@@ -25,38 +24,87 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 const DAYS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const fmtShort = (iso) => {
   if (!iso) return "—";
-  const d = new Date(iso);
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}, ${DAYS[d.getDay()]}`;
-};
-
-// ---- Urgency logic ----
-const URGENCY = {
-  overdue: { border: "#EF4444", dateColor: "#EF4444" },
-  urgent:  { border: "#FF9933", dateColor: "#FF9933" },
-  soon:    { border: "#F59E0B", dateColor: "#F59E0B" },
-  none:    { border: "transparent", dateColor: T.textPrimary },
-};
-
-const getUrgency = (isoDate, status) => {
-  if (!isoDate || status === "Completed" || status === "Cancelled") return "none";
-  // Parse date parts directly to avoid UTC vs local-timezone offset issues
-  const [y, m, day] = isoDate.split("T")[0].split("-").map(Number);
-  const today = new Date(); today.setHours(0,0,0,0);
+  const [y, m, day] = iso.split("T")[0].split("-").map(Number);
   const d = new Date(y, m - 1, day);
-  const diff = Math.round((d - today) / 86400000);
-  if (diff < 0)  return "overdue";
-  if (diff <= 2) return "urgent";
-  if (diff <= 7) return "soon";
-  return "none";
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${DAYS[d.getDay()]}`;
 };
+
+const parseISODate = (iso) => {
+  if (!iso) return null;
+  const [y, m, day] = iso.split("T")[0].split("-").map(Number);
+  return new Date(y, m - 1, day);
+};
+
+const toStartOfDay = (date) => {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+};
+
+const PREVIOUS_RANGE_OPTIONS = [
+  { value: "last-week", label: "Last Week", days: 7 },
+  { value: "last-30-days", label: "Last 30 Days", days: 30 },
+  { value: "last-month", label: "Last Month", days: 30 },
+  { value: "last-90-days", label: "Last 90 Days", days: 90 },
+];
+
+function getEngagementDisplayDateMeta(engagement) {
+  const status = engagement?.x_studio_engagement_status;
+  if (status === "Completed" && engagement?.x_studio_completed_date) {
+    return {
+      date: engagement.x_studio_completed_date,
+      detailLabel: "Completed Date",
+      color: T.success,
+    };
+  }
+  if (status === "Cancelled") {
+    return {
+      date: null,
+      detailLabel: null,
+      color: T.textMuted,
+    };
+  }
+  if (status === "Rescheduled" && engagement?.x_studio_rescheduled_date) {
+    return {
+      date: engagement.x_studio_rescheduled_date,
+      detailLabel: "Rescheduled Date",
+      color: "#F97316",
+    };
+  }
+  if (engagement?.x_studio_proposed_date) {
+    return {
+      date: engagement.x_studio_proposed_date,
+      detailLabel: "Planned Date",
+      color: T.textPrimary,
+    };
+  }
+  if (engagement?.x_studio_rescheduled_date) {
+    return {
+      date: engagement.x_studio_rescheduled_date,
+      detailLabel: "Rescheduled Date",
+      color: "#F97316",
+    };
+  }
+  return {
+    date: null,
+    detailLabel: null,
+    color: T.textMuted,
+  };
+}
 
 // ---- MultiSelect dropdown ----
-function MultiSelect({ label, options, selected, onChange }) {
+function MultiSelect({ label, options, selected, onChange, searchable = false, searchPlaceholder = "Search..." }) {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const ref = useRef(null);
 
   useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const h = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        setSearchQuery("");
+      }
+    };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
@@ -71,10 +119,19 @@ function MultiSelect({ label, options, selected, onChange }) {
     : `${label} (${selected.length})`;
 
   const isActive = selected.length > 0;
+  const visibleOptions = searchable
+    ? options.filter((opt) => String(opt).toLowerCase().includes(searchQuery.toLowerCase()))
+    : options;
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <button onClick={() => setOpen(o => !o)} style={{
+      <button onClick={() => {
+        setOpen((o) => {
+          const next = !o;
+          if (!next) setSearchQuery("");
+          return next;
+        });
+      }} style={{
         padding: "6px 12px", borderRadius: 8,
         border: `1px solid ${isActive ? T.accent : T.border}`,
         background: isActive ? T.accentBg : T.bgCard,
@@ -86,7 +143,7 @@ function MultiSelect({ label, options, selected, onChange }) {
         <span style={{ maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {btnLabel}
         </span>
-        <span style={{ fontSize: 10, flexShrink: 0 }}>{open ? "▴" : "▾"}</span>
+        <span style={{ fontSize: 10, flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
       </button>
       {open && (
         <div style={{
@@ -95,7 +152,52 @@ function MultiSelect({ label, options, selected, onChange }) {
           boxShadow: "0 4px 16px rgba(0,0,0,0.1)", minWidth: 180, maxHeight: 240,
           overflowY: "auto",
         }}>
-          {options.map(opt => (
+          {searchable && (
+            <div style={{ padding: 8, borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={searchPlaceholder}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: "100%",
+                  padding: "7px 10px",
+                  borderRadius: 8,
+                  border: `1px solid ${T.border}`,
+                  background: T.bgInput,
+                  color: T.textPrimary,
+                  fontFamily: "inherit",
+                  fontSize: 12,
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+              {selected.length > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChange([]);
+                  }}
+                  style={{
+                    padding: "7px 10px",
+                    borderRadius: 8,
+                    border: `1px solid ${T.border}`,
+                    background: T.bgCard,
+                    color: T.textMuted,
+                    fontFamily: "inherit",
+                    fontSize: 12,
+                    cursor: "pointer",
+                    flexShrink: 0,
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
+          {visibleOptions.map(opt => (
             <div key={opt} onClick={() => toggle(opt)} style={{
               padding: "8px 12px", fontSize: 12, cursor: "pointer",
               display: "flex", alignItems: "center", gap: 8,
@@ -113,7 +215,7 @@ function MultiSelect({ label, options, selected, onChange }) {
               {opt}
             </div>
           ))}
-          {options.length === 0 && (
+          {visibleOptions.length === 0 && (
             <div style={{ padding: "10px 12px", fontSize: 12, color: T.textMuted }}>No options</div>
           )}
         </div>
@@ -126,9 +228,9 @@ function MultiSelect({ label, options, selected, onChange }) {
 
 // ---- Main VisitsTab ----
 export function VisitsTab({ leads, engagements, userMap }) {
-  const [activeFilter, setActiveFilter] = useState("Planned");
-  const [sortOrder, setSortOrder]       = useState("date-asc");
-  const [selectedKey, setSelectedKey]   = useState(null);
+  const [showPreviousVisits, setShowPreviousVisits] = useState(false);
+  const [previousRange, setPreviousRange] = useState("last-30-days");
+  const [sortOrder, setSortOrder] = useState("date-asc");
 
   // Dropdown filter state (arrays for multi-select)
   const [filterCompany,  setFilterCompany]  = useState([]);
@@ -143,32 +245,44 @@ export function VisitsTab({ leads, engagements, userMap }) {
     return m;
   }, [leads]);
 
-  // Expand engagements into rows — one row per engagement using effective date
-  const allRows = useMemo(() => {
-    const rows = [];
-    engagements.forEach(eng => {
-      const isRescheduled = eng.x_studio_engagement_status === "Rescheduled";
-      const effectiveDate = isRescheduled && eng.x_studio_rescheduled_date
-        ? eng.x_studio_rescheduled_date
-        : eng.x_studio_proposed_date;
-      if (effectiveDate) {
-        const dateType = isRescheduled && eng.x_studio_rescheduled_date ? "Rescheduled" : "Planned Date";
-        rows.push({ key: `${eng.id}-main`, eng, dateISO: effectiveDate, dateType });
-      }
-    });
-    return rows;
-  }, [engagements]);
-
-  // Helper: resolve person names for an engagement
   const getPersonNames = (eng) => {
     const raw = Array.isArray(eng.x_studio_visit_by) ? eng.x_studio_visit_by : [];
     return raw.map(p => getPersonName(p, userMap)).filter(Boolean);
   };
 
-  const isUnassigned = (eng) => {
-    const raw = Array.isArray(eng.x_studio_visit_by) ? eng.x_studio_visit_by : [];
-    return raw.length === 0;
-  };
+  // Expand engagements into normalized rows for current and previous visit views
+  const allRows = useMemo(() => {
+    const today = toStartOfDay(new Date());
+    const rows = [];
+    engagements.forEach((eng) => {
+      const lead = leadMap[eng.x_crm_lead_id?.[0]];
+      if (!lead) return;
+
+      const displayDateMeta = getEngagementDisplayDateMeta(eng);
+      const effectiveDate = displayDateMeta.date;
+      const status = eng.x_studio_engagement_status || "Unknown";
+      const personNames = getPersonNames(eng);
+      const region = lead.x_studio_responsible_region_1 || null;
+      const regionColor = REGION_COLORS[region] || T.textMuted;
+      const comparisonDate = parseISODate(effectiveDate);
+      const isUpcomingVisit = status === "Planned" || status === "Rescheduled";
+      const displayDateISO = effectiveDate;
+
+      rows.push({
+        key: String(eng.id),
+        eng,
+        lead,
+        status,
+        dateISO: displayDateISO,
+        comparisonDateISO: effectiveDate,
+        personNames,
+        region,
+        regionColor,
+        isUpcomingVisit,
+      });
+    });
+    return rows;
+  }, [engagements, leadMap, userMap]);
 
   // Derive dropdown option lists from all rows
   const dropdownOptions = useMemo(() => {
@@ -176,13 +290,12 @@ export function VisitsTab({ leads, engagements, userMap }) {
     const persons   = new Set();
     const engTypes  = new Set();
     const regions   = new Set();
-    allRows.forEach(({ eng }) => {
-      const lead = leadMap[eng.x_crm_lead_id?.[0]];
+    allRows.forEach(({ eng, lead, personNames, region }) => {
       const co = lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1];
       if (co) companies.add(co);
-      getPersonNames(eng).forEach(n => persons.add(n));
+      personNames.forEach(n => persons.add(n));
       if (eng.x_studio_engagement_type) engTypes.add(eng.x_studio_engagement_type);
-      if (lead?.x_studio_responsible_region_1) regions.add(lead.x_studio_responsible_region_1);
+      if (region) regions.add(region);
     });
     return {
       companies: [...companies].sort(),
@@ -190,60 +303,50 @@ export function VisitsTab({ leads, engagements, userMap }) {
       engTypes:  [...engTypes].sort(),
       regions:   [...regions].sort(),
     };
-  }, [allRows, leadMap]); // eslint-disable-line
-
-  // Tab filter
-  const matchesTab = (row, tab) => {
-    const { eng } = row;
-    if (tab === "All")         return true;
-    if (tab === "Planned")     return eng.x_studio_engagement_status === "Planned";
-    if (tab === "Rescheduled") return eng.x_studio_engagement_status === "Rescheduled";
-    if (tab === "Unassigned")  return isUnassigned(eng);
-    return true;
-  };
+  }, [allRows]);
 
   // Dropdown filters — OR within each dimension, AND across dimensions
   const matchesDropdowns = (row) => {
-    const { eng } = row;
-    const lead = leadMap[eng.x_crm_lead_id?.[0]];
+    const { eng, lead, personNames, region } = row;
     if (filterCompany.length > 0) {
       const co = lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1] || "";
       if (!filterCompany.includes(co)) return false;
     }
     if (filterPerson.length > 0) {
-      const names = getPersonNames(eng);
-      if (!names.some(n => filterPerson.includes(n))) return false;
+      if (!personNames.some(n => filterPerson.includes(n))) return false;
     }
     if (filterEngType.length > 0 && !filterEngType.includes(eng.x_studio_engagement_type)) return false;
-    if (filterRegion.length > 0 && !filterRegion.includes(lead?.x_studio_responsible_region_1)) return false;
+    if (filterRegion.length > 0 && !filterRegion.includes(region)) return false;
     return true;
   };
 
-  // Count badges per tab (respects dropdown filters)
-  const tabCounts = useMemo(() => {
-    const tabs = ["All", "Planned", "Unassigned", "Rescheduled"];
-    const counts = {};
-    tabs.forEach(tab => {
-      counts[tab] = allRows.filter(r => matchesTab(r, tab) && matchesDropdowns(r)).length;
-    });
-    return counts;
-  }, [allRows, filterCompany, filterPerson, filterEngType, filterRegion]); // eslint-disable-line
-
   // Filtered + sorted rows
   const visibleRows = useMemo(() => {
-    let rows = allRows.filter(r => matchesTab(r, activeFilter) && matchesDropdowns(r));
+    const today = toStartOfDay(new Date());
+    const rangeDays = PREVIOUS_RANGE_OPTIONS.find((option) => option.value === previousRange)?.days ?? 30;
+    const pastStart = new Date(today);
+    pastStart.setDate(today.getDate() - rangeDays);
+
+    let rows = allRows.filter((row) => {
+      if (!matchesDropdowns(row)) return false;
+      const rowDate = parseISODate(row.comparisonDateISO);
+      if (showPreviousVisits) {
+        if (!rowDate || rowDate >= today) return false;
+        return rowDate >= pastStart;
+      }
+      return row.isUpcomingVisit;
+    });
+
     rows.sort((a, b) => {
-      if (sortOrder === "date-asc")   return (a.dateISO || "").localeCompare(b.dateISO || "");
-      if (sortOrder === "date-desc")  return (b.dateISO || "").localeCompare(a.dateISO || "");
+      if (sortOrder === "date-asc")   return (a.comparisonDateISO || a.dateISO || "").localeCompare(b.comparisonDateISO || b.dateISO || "");
+      if (sortOrder === "date-desc")  return (b.comparisonDateISO || b.dateISO || "").localeCompare(a.comparisonDateISO || a.dateISO || "");
       if (sortOrder === "value-desc") {
-        const la = leadMap[a.eng.x_crm_lead_id?.[0]];
-        const lb = leadMap[b.eng.x_crm_lead_id?.[0]];
-        return (lb?.expected_revenue || 0) - (la?.expected_revenue || 0);
+        return (b.lead?.expected_revenue || 0) - (a.lead?.expected_revenue || 0);
       }
       return 0;
     });
     return rows;
-  }, [allRows, activeFilter, filterCompany, filterPerson, filterEngType, filterRegion, sortOrder, leadMap]); // eslint-disable-line
+  }, [allRows, filterCompany, filterPerson, filterEngType, filterRegion, sortOrder, showPreviousVisits, previousRange]); // eslint-disable-line
 
   // Quick-stats bar
   const typeStats = useMemo(() => {
@@ -255,102 +358,119 @@ export function VisitsTab({ leads, engagements, userMap }) {
     return counts;
   }, [visibleRows]);
 
-  // Selected engagement — derives from selectedKey
-  const selectedEngagement = useMemo(() => {
-    if (!selectedKey) return null;
-    const [id] = selectedKey.split("-");
-    return engagements.find(e => String(e.id) === id) || null;
-  }, [selectedKey, engagements]);
-
-  // Tab change handler — clears selected record
-  const handleTabChange = (tabId) => {
-    setActiveFilter(tabId);
-    setSelectedKey(null);
-  };
-
   const anyDropdownActive = filterCompany.length > 0 || filterPerson.length > 0 || filterEngType.length > 0 || filterRegion.length > 0;
-
-  const FILTER_TABS = [
-    { id: "All",         label: "All" },
-    { id: "Planned",     label: "Planned" },
-    { id: "Unassigned",  label: "Unassigned" },
-    { id: "Rescheduled", label: "Rescheduled" },
-  ];
-
-  const COL_HEADERS = ["Date", "Engage. Type", "Company", "Order Value", "Assigned To", "Region", "Status"];
-  const GRID = "110px 140px 1.4fr 90px 160px 100px 110px";
+  const COL_HEADERS = ["Company", "Date", "Order Value", "Region", "Engage. Type", "Assigned To", "Status", "Remarks"];
+  const GRID = "1.1fr 132px 100px 112px 146px 160px 120px 1fr";
 
   return (
     <div>
-      <style>{`@keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }`}</style>
+      <style>{`
+        @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+        .visit-odoo-link {
+          font-size: 11px;
+          color: #02818A;
+          text-decoration: none;
+          opacity: 0;
+          transition: opacity 0.15s;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          margin-top: 4px;
+        }
+        .visit-row:hover .visit-odoo-link {
+          opacity: 1;
+        }
+      `}</style>
 
-      {/* -- Single row: Filter tabs (left) + MultiSelect dropdowns + sort (right) -- */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
-        {/* Tab pills */}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {FILTER_TABS.map(tab => {
-            const active = activeFilter === tab.id;
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        <button
+          type="button"
+          onClick={() => {
+            setShowPreviousVisits((prev) => !prev);
+          }}
+          style={{
+            padding: "6px 12px",
+            borderRadius: 999,
+            border: `1px solid ${showPreviousVisits ? T.accent : T.border}`,
+            background: showPreviousVisits ? T.accentBg : T.bgCard,
+            color: showPreviousVisits ? T.accent : T.textSecondary,
+            fontSize: 12,
+            fontWeight: 600,
+            fontFamily: "inherit",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          View Previous Visits
+        </button>
+        <MultiSelect label="Company" options={dropdownOptions.companies} selected={filterCompany} onChange={setFilterCompany} searchable searchPlaceholder="Search company..." />
+        <MultiSelect label="Person" options={dropdownOptions.persons} selected={filterPerson} onChange={setFilterPerson} searchable searchPlaceholder="Search person..." />
+        <MultiSelect label="Type" options={dropdownOptions.engTypes} selected={filterEngType} onChange={setFilterEngType} searchable searchPlaceholder="Search type..." />
+        <MultiSelect label="Region" options={dropdownOptions.regions} selected={filterRegion} onChange={setFilterRegion} searchable searchPlaceholder="Search region..." />
+        {anyDropdownActive && (
+          <button
+            onClick={() => { setFilterCompany([]); setFilterPerson([]); setFilterEngType([]); setFilterRegion([]); }}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: `1px solid ${T.border}`,
+              background: "none",
+              color: T.textMuted,
+              fontSize: 12,
+              fontFamily: "inherit",
+              cursor: "pointer",
+            }}
+          >
+            ✕
+          </button>
+        )}
+        <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} style={{
+          padding: "6px 10px",
+          borderRadius: 8,
+          border: `1px solid ${T.border}`,
+          background: T.bgCard,
+          color: T.textPrimary,
+          fontSize: 12,
+          fontFamily: "inherit",
+          cursor: "pointer",
+          outline: "none",
+        }}>
+          <option value="date-asc">Date Ascn</option>
+          <option value="date-desc">Date Desc</option>
+          <option value="value-desc">Value ↓</option>
+        </select>
+      </div>
+
+      {showPreviousVisits && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+          {PREVIOUS_RANGE_OPTIONS.map((option) => {
+            const active = previousRange === option.value;
             return (
-              <button key={tab.id} onClick={() => handleTabChange(tab.id)} style={{
-                display: "flex", alignItems: "center", gap: 5,
-                padding: "5px 14px", borderRadius: 100, fontSize: 12, fontWeight: 600,
-                border: `1px solid ${active ? T.accent : T.border}`,
-                background: active ? T.accentBg : T.bgCard,
-                color: active ? T.accent : T.textSecondary,
-                cursor: "pointer", transition: "all 0.15s", fontFamily: "inherit",
-              }}>
-                {tab.label}
-                <span style={{
-                  fontSize: 10, fontWeight: 700, minWidth: 18, textAlign: "center",
-                  background: active ? T.accent : T.bgInput, color: active ? "#fff" : T.textMuted,
-                  borderRadius: 100, padding: "1px 5px",
-                }}>{tabCounts[tab.id] ?? 0}</span>
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  setPreviousRange(option.value);
+                }}
+                style={{
+                  padding: "5px 12px",
+                  borderRadius: 999,
+                  border: `1px solid ${active ? T.accent : T.border}`,
+                  background: active ? T.accentBg : T.bgCard,
+                  color: active ? T.accent : T.textSecondary,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                }}
+              >
+                {option.label}
               </button>
             );
           })}
         </div>
-
-        {/* Right side: MultiSelect dropdowns + clear + sort */}
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          <MultiSelect label="Company"     options={dropdownOptions.companies} selected={filterCompany}  onChange={setFilterCompany} />
-          <MultiSelect label="Person"      options={dropdownOptions.persons}   selected={filterPerson}   onChange={setFilterPerson} />
-          <MultiSelect label="Type"        options={dropdownOptions.engTypes}  selected={filterEngType}  onChange={setFilterEngType} />
-          <MultiSelect label="Region"      options={dropdownOptions.regions}   selected={filterRegion}   onChange={setFilterRegion} />
-          {anyDropdownActive && (
-            <button
-              onClick={() => { setFilterCompany([]); setFilterPerson([]); setFilterEngType([]); setFilterRegion([]); }}
-              style={{
-                padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.border}`,
-                background: "none", color: T.textMuted, fontSize: 12, fontFamily: "inherit",
-                cursor: "pointer",
-              }}
-            >✕</button>
-          )}
-          <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} style={{
-            padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.border}`,
-            background: T.bgCard, color: T.textPrimary, fontSize: 12, fontFamily: "inherit",
-            cursor: "pointer", outline: "none",
-          }}>
-            <option value="date-asc">Date ↑</option>
-            <option value="date-desc">Date ↓</option>
-            <option value="value-desc">Value ↓</option>
-          </select>
-        </div>
-      </div>
-
-      {/* -- Urgency legend -- */}
-      <div style={{ fontSize: 11, marginBottom: 10, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
-        {[
-          { color: "#EF4444", label: "Overdue" },
-          { color: "#FF9933", label: "Due in \u22642 days" },
-          { color: "#F59E0B", label: "Due this week" },
-        ].map(({ color, label }) => (
-          <span key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
-            <span style={{ color: T.textSecondary }}>{label}</span>
-          </span>
-        ))}
-      </div>
+      )}
 
       {/* -- Quick-stats type bar -- */}
       {Object.keys(typeStats).length > 0 && (
@@ -384,25 +504,15 @@ export function VisitsTab({ leads, engagements, userMap }) {
             {/* Empty state */}
             {visibleRows.length === 0 && (
               <div style={{ padding: "40px 16px", textAlign: "center", color: T.textMuted, fontSize: 13 }}>
-                {activeFilter === "Unassigned" ? "✓ All visits have been assigned."
-                  : activeFilter === "Planned"  ? "No planned visits found."
-                  : "No results match your filters."}
+                {showPreviousVisits ? "No visits found in the selected historical range." : "No planned or rescheduled visits found."}
               </div>
             )}
 
             {/* Rows */}
             {visibleRows.map((row) => {
-              const { key, eng, dateISO, dateType } = row;
-              const lead      = leadMap[eng.x_crm_lead_id?.[0]];
-              const status    = eng.x_studio_engagement_status || "Unknown";
+              const { key, eng, lead, status, dateISO, personNames, region, regionColor } = row;
               const cfg       = STATUS_CONFIG[status] || { bg: "#E2E6ED", text: "#4A5568" };
-              const urgency   = URGENCY[getUrgency(dateISO, status)];
-              const isAnomaly = eng.x_studio_visit_date && status === "Planned";
-              const personNames = getPersonNames(eng);
-              const unassigned  = personNames.length === 0;
-              const isSelected  = selectedKey === key;
-              const region      = lead?.x_studio_responsible_region_1 || null;
-              const regionColor = REGION_COLORS[region] || T.textMuted;
+              const isAnomaly = eng.x_studio_completed_date && status === "Planned";
 
               return (
                 <VisitRow
@@ -410,61 +520,75 @@ export function VisitsTab({ leads, engagements, userMap }) {
                   eng={eng}
                   lead={lead}
                   dateISO={dateISO}
-                  dateType={dateType}
                   status={status}
                   cfg={cfg}
-                  urgency={urgency}
                   isAnomaly={isAnomaly}
                   personNames={personNames}
-                  unassigned={unassigned}
                   region={region}
                   regionColor={regionColor}
-                  isSelected={isSelected}
                   GRID={GRID}
-                  onRowClick={() => setSelectedKey(isSelected ? null : key)}
                 />
               );
             })}
           </div>
         </div>
       </div>
-
-      {/* --- Detail Panel --- */}
-      {selectedEngagement && leadMap[selectedEngagement.x_crm_lead_id?.[0]] && (
-        <div style={{ marginBottom: 12, marginTop: 12 }}>
-          <LeadCard 
-            lead={leadMap[selectedEngagement.x_crm_lead_id?.[0]]} 
-            onClose={() => setSelectedKey(null)} 
-          />
-        </div>
-      )}
     </div>
   );
 }
 
 // --- Single visit row (own component for hover state) ---
-function VisitRow({ eng, lead, dateISO, dateType, status, cfg, urgency, isAnomaly, personNames, unassigned, region, regionColor, isSelected, GRID, onRowClick }) {
+function VisitRow({ eng, lead, dateISO, status, cfg, isAnomaly, personNames, region, regionColor, GRID }) {
   const [hovered, setHovered] = useState(false);
 
   return (
     <div
-      onClick={onRowClick}
+      className="visit-row"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
         display: "grid", gridTemplateColumns: GRID, gap: 8,
-        padding: "9px 16px", alignItems: "center",
+        padding: "10px 16px", alignItems: "center",
         borderBottom: `1px solid ${T.border}`,
-        borderLeft: `4px solid ${urgency.border}`,
-        background: isSelected ? T.accentBg : hovered ? T.bgCardAlt : "transparent",
-        cursor: "pointer", transition: "background 0.15s",
-        outline: isSelected ? `1px solid ${T.accentBdr}` : "none",
-        outlineOffset: -1,
+        background: hovered ? T.bgCardAlt : "transparent",
+        transition: "background 0.15s",
       }}
     >
+      {/* Company */}
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, color: T.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1] || "—"}
+        </div>
+        <a
+          className="visit-odoo-link"
+          href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(event) => event.stopPropagation()}
+        >
+          View in Odoo ↗
+        </a>
+      </div>
+
       {/* Date */}
-      <div style={{ fontSize: 12, fontWeight: 600, color: urgency.dateColor, whiteSpace: "nowrap" }}>
-        {dateISO ? fmtShort(dateISO) : "—"}
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: T.textPrimary, whiteSpace: "nowrap" }}>
+          {dateISO ? fmtShort(dateISO) : "—"}
+        </div>
+      </div>
+
+      {/* Order Value */}
+      <div style={{ fontSize: 12, fontWeight: 700, color: lead?.expected_revenue > 0 ? T.success : T.textMuted }}>
+        {lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—"}
+      </div>
+
+      {/* Region */}
+      <div>
+        {region ? (
+          <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: `${regionColor}18`, color: regionColor }}>
+            {region}
+          </span>
+        ) : <span style={{ fontSize: 11, color: T.textMuted }}>—</span>}
       </div>
 
       {/* Engagement Type */}
@@ -479,34 +603,11 @@ function VisitRow({ eng, lead, dateISO, dateType, status, cfg, urgency, isAnomal
         )}
       </div>
 
-      {/* Company */}
-      <div style={{ fontSize: 12, color: T.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1] || "—"}
-      </div>
-
-      {/* Order Value */}
-      <div style={{ fontSize: 12, fontWeight: 700, color: lead?.expected_revenue > 0 ? T.success : T.textMuted }}>
-        {lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—"}
-      </div>
-
       {/* Assigned To */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 3, alignItems: "center" }}>
-        {unassigned ? (
-          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: "#F59E0B", color: "#fff" }}>• Unassigned</span>
-        ) : (
-          personNames.map((n, i) => (
-            <span key={n} style={{ fontSize: 11, color: T.textSecondary }}>{n}{i < personNames.length - 1 ? "," : ""}</span>
-          ))
-        )}
-      </div>
-
-      {/* Region */}
-      <div>
-        {region ? (
-          <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: `${regionColor}18`, color: regionColor }}>
-            {region}
-          </span>
-        ) : <span style={{ fontSize: 11, color: T.textMuted }}>—</span>}
+        {personNames.length > 0 ? personNames.map((n, i) => (
+          <span key={n} style={{ fontSize: 11, color: T.textSecondary }}>{n}{i < personNames.length - 1 ? "," : ""}</span>
+        )) : <span style={{ fontSize: 11, color: T.textMuted }}>—</span>}
       </div>
 
       {/* Status */}
@@ -517,6 +618,23 @@ function VisitRow({ eng, lead, dateISO, dateType, status, cfg, urgency, isAnomal
         {isAnomaly && (
           <span title="Visit recorded but status not updated" style={{ fontSize: 11, cursor: "help" }}>⚠</span>
         )}
+      </div>
+
+      {/* Remarks */}
+      <div
+        title={eng.x_studio_remarkscommments || ""}
+        style={{
+          fontSize: 11,
+          color: eng.x_studio_remarkscommments ? T.textSecondary : T.textMuted,
+          lineHeight: 1.4,
+          overflow: "hidden",
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          wordBreak: "break-word",
+        }}
+      >
+        {eng.x_studio_remarkscommments || "—"}
       </div>
     </div>
   );

@@ -176,7 +176,7 @@ function Pill({ engagement, lead, isFollowUp, empMap, isSelected, onClick }) {
   const status = engagement.x_studio_engagement_status || "Unknown";
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.Unknown;
   const customerName = lead?.partner_id?.[1] || engagement.x_crm_lead_id?.[1] || "—";
-  const isAnomaly = !isFollowUp && engagement.x_studio_visit_date && status === "Planned";
+  const isAnomaly = !isFollowUp && engagement.x_studio_completed_date && status === "Planned";
   const isCancelled = status === "Cancelled";
   const emoji = getTypeEmoji(engagement.x_studio_engagement_type);
   const { date: displayDate, label: displayDateLabel } = getDisplayDateMeta(engagement);
@@ -187,8 +187,7 @@ function Pill({ engagement, lead, isFollowUp, empMap, isSelected, onClick }) {
     engagement.x_studio_engagement_with ? `With: ${engagement.x_studio_engagement_with}` : null,
     lead?.expected_revenue > 0 ? `Deal: ${fmt(lead.expected_revenue)}` : null,
     `Status: ${status}`,
-    `${displayDateLabel}: ${fmtDate(displayDate)}`,
-    engagement.x_studio_visit_date ? `Actual: ${fmtDate(engagement.x_studio_visit_date)}` : null,
+    displayDateLabel && displayDate ? `${displayDateLabel}: ${fmtDate(displayDate)}` : null,
     engagement.x_studio_next_follow_up_date ? `Follow-up: ${fmtDate(engagement.x_studio_next_follow_up_date)}` : null,
     engagement.x_studio_remarkscommments ? `Remarks: ${engagement.x_studio_remarkscommments}` : null,
     isAnomaly ? "⚠ Visit done but status not updated" : null,
@@ -208,9 +207,11 @@ function Pill({ engagement, lead, isFollowUp, empMap, isSelected, onClick }) {
     overflow: "hidden",
     cursor: "pointer",
     marginBottom: 2,
-    outline: isSelected ? `2px solid ${T.textPrimary}` : "none",
+    outline: isSelected ? `2px solid ${T.accent}` : "none",
     outlineOffset: 1,
-    transition: "outline 0.1s",
+    boxShadow: isSelected ? `0 0 0 3px ${T.accentBg}` : "none",
+    transition: "outline 0.1s, box-shadow 0.1s, transform 0.1s",
+    transform: isSelected ? "translateY(-1px)" : "none",
     userSelect: "none",
   };
 
@@ -219,9 +220,9 @@ function Pill({ engagement, lead, isFollowUp, empMap, isSelected, onClick }) {
       <Tooltip content={tooltipLines}>
         <div onClick={onClick} style={{
           ...baseStyle,
-          background: `${cfg.bg}18`,
-          border: `1.5px dashed ${cfg.border}`,
-          opacity: 0.75,
+          background: isSelected ? `${T.accent}22` : `${cfg.bg}18`,
+          border: `1.5px dashed ${isSelected ? T.accent : cfg.border}`,
+          opacity: isSelected ? 1 : 0.75,
         }}>
           {emoji}
         </div>
@@ -233,10 +234,11 @@ function Pill({ engagement, lead, isFollowUp, empMap, isSelected, onClick }) {
     <Tooltip content={tooltipLines}>
       <div onClick={onClick} style={{
         ...baseStyle,
-        background: cfg.bg,
-        border: `1px solid ${cfg.border}`,
+        background: isSelected ? T.accent : cfg.bg,
+        border: `1px solid ${isSelected ? T.accent : cfg.border}`,
         textDecoration: isCancelled ? "line-through" : "none",
         position: "relative",
+        color: isSelected ? "#fff" : undefined,
       }}>
         {emoji}
         {isAnomaly && (
@@ -278,17 +280,34 @@ const fmtListDate = (iso) => {
   const d = new Date(iso);
   const day = d.getDate();
   const mon = MONTH_NAMES[d.getMonth()].slice(0, 3);
+  const year = d.getFullYear();
   const dow = DAY_SHORT[d.getDay()];
-  return `${day} ${mon}, ${dow}`;
+  return `${day} ${mon} ${year}, ${dow}`;
 };
 
 const getDisplayDateMeta = (engagement) => {
   const status = engagement?.x_studio_engagement_status;
 
+  if (status === "Completed" && engagement?.x_studio_completed_date) {
+    return {
+      date: engagement.x_studio_completed_date,
+      label: "Completed Date",
+      color: T.success,
+    };
+  }
+
+  if (status === "Cancelled") {
+    return {
+      date: null,
+      label: null,
+      color: T.textMuted,
+    };
+  }
+
   if (status === "Rescheduled" && engagement?.x_studio_rescheduled_date) {
     return {
       date: engagement.x_studio_rescheduled_date,
-      label: "Rescheduled",
+      label: "Rescheduled Date",
       color: "#F97316",
     };
   }
@@ -376,7 +395,7 @@ function ActivityDetailCard({ engagement, lead, empMap, onClose }) {
         <Field label="Engagement Type" value={engagement.x_studio_engagement_type || "—"} />
         <Field label="Engagement With" value={engagement.x_studio_engagement_with || "—"} />
         <Field label="Assigned To" value={assignedTo} />
-        <Field label={detailLabel} value={fmtDate(detailDate)} />
+        {detailLabel && <Field label={detailLabel} value={fmtDate(detailDate)} />}
       </div>
 
       <div>
@@ -497,7 +516,7 @@ function ListView({ engagements, leadMap, empMap, daySet, allPeople, selectedPeo
               const lead = leadMap[e.x_crm_lead_id?.[0]];
               const status = e.x_studio_engagement_status || "Unknown";
               const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.Unknown;
-              const isAnomaly = e.x_studio_visit_date && status === "Planned";
+              const isAnomaly = e.x_studio_completed_date && status === "Planned";
               const persons = Array.isArray(e.x_studio_visit_by) ? e.x_studio_visit_by : [];
               const personNames = persons.map(p => resolveEmpName(p, empMap)).filter(Boolean);
               const isSelected = selectedPill && selectedPill.engId === e.id;
@@ -703,12 +722,14 @@ export default function SwimlaneView() {
     try {
       const orDomain = [
         "|",
+        "|",
         "&", ["x_studio_proposed_date", ">=", rangeStartISO], ["x_studio_proposed_date", "<=", rangeEndISO],
         "&", ["x_studio_rescheduled_date", ">=", rangeStartISO], ["x_studio_rescheduled_date", "<=", rangeEndISO],
+        "&", ["x_studio_completed_date", ">=", rangeStartISO], ["x_studio_completed_date", "<=", rangeEndISO],
       ];
       const rawEngagements = await fetchOdoo("x_crm_lead_line_6bc5b", "search_read", [orDomain], {
         fields: [
-          "x_studio_proposed_date", "x_studio_rescheduled_date",
+          "x_studio_proposed_date", "x_studio_rescheduled_date", "x_studio_completed_date",
           "x_studio_engagement_type", "x_studio_engagement_status",
           "x_studio_visit_by", "x_crm_lead_id", "x_studio_remarkscommments", "x_studio_engagement_with",
         ],
@@ -735,10 +756,12 @@ export default function SwimlaneView() {
 
       const lMap = {}; (rawLeads||[]).forEach(l => { lMap[l.id] = l; });
       const eMap = {}; (rawEmps||[]).forEach(e => { eMap[e.id] = e.name; });
+      const visibleLeadIds = new Set(Object.keys(lMap).map(Number));
+      const visibleEngagements = engList.filter((engagement) => visibleLeadIds.has(engagement?.x_crm_lead_id?.[0]));
 
       setLeadMap(lMap);
       setEmpMap(eMap);
-      setEngagements(engList);
+      setEngagements(visibleEngagements);
       setSelectedPill(null);
     } catch (err) {
       setError(err.message);
@@ -815,7 +838,7 @@ export default function SwimlaneView() {
     summary.total++;
     const s = e.x_studio_engagement_status;
     if (s in summary) summary[s]++;
-    if (e.x_studio_visit_date && s === "Planned") summary.anomaly++;
+    if (e.x_studio_completed_date && s === "Planned") summary.anomaly++;
   });
 
   // ── Selected pill engagement lookup ──────────────────────────────────────
@@ -903,12 +926,6 @@ export default function SwimlaneView() {
           </div>
 
           <MultiSelect options={allPeople} selected={selectedPeople} onChange={setSelectedPeople} placeholder="All people" />
-          <MultiSelect
-            options={["Planned", "Rescheduled", "Completed", "Cancelled"]}
-            selected={selectedStatuses}
-            onChange={setSelectedStatuses}
-            placeholder="All statuses"
-          />
           {selectedPeople.length > 0 && (
             <button onClick={() => setSelectedPeople([])} style={{ ...navBtnStyle, fontSize: 11, color: T.textMuted }}>Clear people</button>
           )}
@@ -924,13 +941,34 @@ export default function SwimlaneView() {
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10 }}>
             <span style={{ fontWeight: 700, color: T.textPrimary }}>{summary.total} activities</span>
           </div>
-          {[["Planned", STATUS_CONFIG.Planned.bg],["Completed", STATUS_CONFIG.Completed.bg],["Rescheduled", STATUS_CONFIG.Rescheduled.bg],["Cancelled", STATUS_CONFIG.Cancelled.bg]].map(([label, color]) => (
-            <div key={label} onClick={() => toggleStatus(label)} style={{ cursor: "pointer", padding: "8px 12px", borderRadius: 10, border: `1px solid ${T.border}`, background: selectedStatuses.includes(label) ? T.bgCard : "transparent", display: "flex", alignItems: "center", gap: 8 }}>
+          {[
+            ["Planned", STATUS_CONFIG.Planned.bg, "rgba(16,185,129,0.10)", "rgba(5,150,105,0.25)"],
+            ["Completed", STATUS_CONFIG.Completed.bg, "rgba(59,130,246,0.10)", "rgba(37,99,235,0.25)"],
+            ["Rescheduled", STATUS_CONFIG.Rescheduled.bg, "rgba(245,158,11,0.12)", "rgba(217,119,6,0.25)"],
+            ["Cancelled", STATUS_CONFIG.Cancelled.bg, "rgba(148,163,184,0.12)", "rgba(100,116,139,0.25)"],
+          ].map(([label, color, activeBg, activeBorder]) => {
+            const isActive = selectedStatuses.includes(label);
+            return (
+            <div
+              key={label}
+              onClick={() => toggleStatus(label)}
+              style={{
+                cursor: "pointer",
+                padding: "8px 12px",
+                borderRadius: 10,
+                border: `1px solid ${isActive ? activeBorder : T.border}`,
+                background: isActive ? activeBg : "transparent",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                transition: "background 0.15s, border-color 0.15s",
+              }}
+            >
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
-              <span style={{ fontWeight: 700, color: T.textSecondary }}>{summary[label]}</span>
-              <span style={{ color: T.textMuted }}>{label}</span>
+              <span style={{ fontWeight: 700, color: isActive ? T.textPrimary : T.textSecondary }}>{summary[label]}</span>
+              <span style={{ color: isActive ? T.textPrimary : T.textMuted }}>{label}</span>
             </div>
-          ))}
+          )})}
           {summary.anomaly > 0 && (
             <div style={{ padding: "8px 12px", borderRadius: 10, border: `1px solid ${T.border}`, background: T.bgCard }}>
               <span style={{ color: "#D97706", fontWeight: 600 }}>⚠ {summary.anomaly} status not updated</span>
