@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { T } from "../constants/theme";
 import { REGION_COLORS, PERSON_COLORS } from "../constants/colors";
 import { fmt, fmtDate, getPersonName, getPersonNames } from "../lib/format";
+import HealthTag, { hasAnyActivity, hasCompletedActivity } from "../components/HealthTag";
 
 // ---- Local constants (mirrored from VisitsTab) ----
 const STATUS_CONFIG = {
@@ -79,8 +80,8 @@ const getDisplayDateMeta = (engagement) => {
   if (engagement?.x_studio_proposed_date) {
     return {
       date: engagement.x_studio_proposed_date,
-      label: "Proposed",
-      detailLabel: "Proposed Date",
+      label: "Planned Date",
+      detailLabel: "Planned Date",
       pillBg: "rgba(100,116,139,0.10)",
       pillColor: "#64748B",
     };
@@ -98,8 +99,8 @@ const getDisplayDateMeta = (engagement) => {
 
   return {
     date: null,
-    label: "Proposed",
-    detailLabel: "Proposed Date",
+    label: "Planned Date",
+    detailLabel: "Planned Date",
     pillBg: "rgba(100,116,139,0.10)",
     pillColor: "#64748B",
   };
@@ -151,6 +152,7 @@ function EngagementDetailCard({ engagement, lead, userMap }) {
         <Field label="Customer" value={company} />
         <Field label="Deal Value" value={orderValue} color={orderValue !== "—" ? T.success : T.textMuted} />
         <Field label="Engagement Type" value={engagement.x_studio_engagement_type || "—"} />
+        <Field label="Engagement With" value={engagement.x_studio_engagement_with || "—"} />
         <Field label="Assigned To" value={assignedTo} />
         <Field label={detailLabel} value={fmtDate(detailDate)} />
       </div>
@@ -384,6 +386,11 @@ function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, u
                         <div style={{ fontSize: 12, fontWeight: 600, color: T.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1] || "—"}
                         </div>
+                        {eng.x_studio_engagement_with && (
+                          <div style={{ fontSize: 10, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            With: {eng.x_studio_engagement_with}
+                          </div>
+                        )}
                         <div style={{ fontSize: 11, color: urg.dateColor }}>{fmtShort(effDate)}</div>
                       </div>
                       <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: cfg.bg, color: cfg.text, flexShrink: 0 }}>{status}</span>
@@ -420,7 +427,7 @@ function Breadcrumb({ segments }) {
 }
 
 // --- This Week's Planned Activities card ---
-function WeeklyActivityCard({ engagements, leads, userMap, personKeys }) {
+function WeeklyActivityCard({ engagements, leads, userMap, personKeys, completedByLead, anyByLead }) {
   const [selectedKey, setSelectedKey] = useState(null);
 
   const leadMap = useMemo(() => {
@@ -527,6 +534,8 @@ function WeeklyActivityCard({ engagements, leads, userMap, personKeys }) {
                         <ActivityCard
                           eng={eng}
                           lead={lead}
+                          hasCompleted={!!completedByLead[lead?.id]}
+                          hasAnyActivity={!!anyByLead[lead?.id]}
                           cfg={cfg}
                           urg={urg}
                           isSelected={isSelected}
@@ -550,7 +559,7 @@ function WeeklyActivityCard({ engagements, leads, userMap, personKeys }) {
   );
 }
 
-function ActivityCard({ eng, lead, cfg, urg, isSelected, onClick }) {
+function ActivityCard({ eng, lead, hasCompleted, hasAnyActivity: hasAnyActivityFlag, cfg, urg, isSelected, onClick }) {
   const [hovered, setHovered] = useState(false);
   const { date: showDate, label: showDateLabel, pillBg, pillColor } = getDisplayDateMeta(eng);
 
@@ -576,12 +585,27 @@ function ActivityCard({ eng, lead, cfg, urg, isSelected, onClick }) {
         <div style={{ fontSize: 12, fontWeight: 600, color: T.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1] || "—"}
         </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, minWidth: 0 }}>
+          <HealthTag
+            health={lead?.x_studio_prospect_health}
+            hasCompleted={hasCompleted}
+            hasAnyActivity={hasAnyActivityFlag}
+            expectedClosingISO={lead?.x_studio_expected_closing}
+          />
+        </div>
+        {eng.x_studio_engagement_with && (
+          <div style={{ marginTop: 2, fontSize: 10, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            With: {eng.x_studio_engagement_with}
+          </div>
+        )}
         <div style={{ display: "flex", gap: 8, marginTop: 2, flexWrap: "wrap" }}>
           {showDate && (
             <span style={{ fontSize: 10, color: urg.dateColor }}>
-              <span style={{ background: pillBg, color: pillColor, borderRadius: 100, padding: "1px 6px", fontSize: 9, fontWeight: 600, marginRight: 3 }}>
-                {showDateLabel}
-              </span>
+              {showDateLabel === "Rescheduled" && (
+                <span style={{ background: pillBg, color: pillColor, borderRadius: 100, padding: "1px 6px", fontSize: 9, fontWeight: 600, marginRight: 3 }}>
+                  {showDateLabel}
+                </span>
+              )}
               {fmtShort(showDate)}
             </span>
           )}
@@ -595,7 +619,7 @@ function ActivityCard({ eng, lead, cfg, urg, isSelected, onClick }) {
 }
 
 // --- Overdue Activities card ---
-function OverdueActivityCard({ engagements, leads, userMap, personKeys }) {
+function OverdueActivityCard({ engagements, leads, userMap, personKeys, completedByLead, anyByLead }) {
   const [selectedKey, setSelectedKey] = useState(null);
 
   const leadMap = useMemo(() => {
@@ -688,6 +712,8 @@ function OverdueActivityCard({ engagements, leads, userMap, personKeys }) {
                       <ActivityCard
                         eng={eng}
                         lead={lead}
+                        hasCompleted={!!completedByLead[lead?.id]}
+                        hasAnyActivity={!!anyByLead[lead?.id]}
                         cfg={cfg}
                         urg={urg}
                         isSelected={isSelected}
@@ -714,6 +740,25 @@ function OverdueActivityCard({ engagements, leads, userMap, personKeys }) {
 export function TeamTab({ leads, personRegion, personKeys, allRegions, engagements = [], userMap = {} }) {
   const [drill, setDrill] = useState({ level: 0, personName: null, engagementId: null });
   const isPersonSelected = drill.level > 0;
+  const { completedByLead, anyByLead } = useMemo(() => {
+    const completedMap = {};
+    const anyMap = {};
+    const engagementsByLead = {};
+
+    engagements.forEach((engagement) => {
+      const leadId = engagement?.x_crm_lead_id?.[0];
+      if (!leadId) return;
+      if (!engagementsByLead[leadId]) engagementsByLead[leadId] = [];
+      engagementsByLead[leadId].push(engagement);
+    });
+
+    Object.entries(engagementsByLead).forEach(([leadId, leadEngagements]) => {
+      completedMap[leadId] = hasCompletedActivity(leadEngagements);
+      anyMap[leadId] = hasAnyActivity(leadEngagements);
+    });
+
+    return { completedByLead: completedMap, anyByLead: anyMap };
+  }, [engagements]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -735,16 +780,19 @@ export function TeamTab({ leads, personRegion, personKeys, allRegions, engagemen
             leads={leads}
             userMap={userMap}
             personKeys={personKeys}
+            completedByLead={completedByLead}
+            anyByLead={anyByLead}
           />
           <WeeklyActivityCard
             engagements={engagements}
             leads={leads}
             userMap={userMap}
             personKeys={personKeys}
+            completedByLead={completedByLead}
+            anyByLead={anyByLead}
           />
         </>
       )}
     </div>
   );
 }
-

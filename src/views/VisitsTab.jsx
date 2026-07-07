@@ -152,7 +152,7 @@ export function VisitsTab({ leads, engagements, userMap }) {
         ? eng.x_studio_rescheduled_date
         : eng.x_studio_proposed_date;
       if (effectiveDate) {
-        const dateType = isRescheduled && eng.x_studio_rescheduled_date ? "Rescheduled" : "Proposed";
+        const dateType = isRescheduled && eng.x_studio_rescheduled_date ? "Rescheduled" : "Planned Date";
         rows.push({ key: `${eng.id}-main`, eng, dateISO: effectiveDate, dateType });
       }
     });
@@ -277,8 +277,8 @@ export function VisitsTab({ leads, engagements, userMap }) {
     { id: "Rescheduled", label: "Rescheduled" },
   ];
 
-  const COL_HEADERS = ["Date", "Date Type", "Engage. Type", "Company", "Order Value", "Assigned To", "Region", "Status"];
-  const GRID = "110px 90px 140px 1.4fr 90px 160px 100px 110px";
+  const COL_HEADERS = ["Date", "Engage. Type", "Company", "Order Value", "Assigned To", "Region", "Status"];
+  const GRID = "110px 140px 1.4fr 90px 160px 100px 110px";
 
   return (
     <div>
@@ -446,12 +446,6 @@ export function VisitsTab({ leads, engagements, userMap }) {
 function VisitRow({ eng, lead, dateISO, dateType, status, cfg, urgency, isAnomaly, personNames, unassigned, region, regionColor, isSelected, GRID, onRowClick }) {
   const [hovered, setHovered] = useState(false);
 
-  const isFollowUp = dateType === "Follow-Up";
-  const isRescheduledType = dateType === "Rescheduled";
-  const dateTypePill = isRescheduledType
-    ? { bg: "rgba(249,115,22,0.10)", color: "#F97316", label: "Rescheduled" }
-    : { bg: "rgba(100,116,139,0.10)", color: "#64748B", label: "Proposed" };
-
   return (
     <div
       onClick={onRowClick}
@@ -473,18 +467,16 @@ function VisitRow({ eng, lead, dateISO, dateType, status, cfg, urgency, isAnomal
         {dateISO ? fmtShort(dateISO) : "—"}
       </div>
 
-      {/* Date Type pill */}
-      <div>
-        <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: dateTypePill.bg, color: dateTypePill.color }}>
-          {dateTypePill.label}
-        </span>
-      </div>
-
       {/* Engagement Type */}
       <div>
         <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: "rgba(124,58,237,0.10)", color: "#7C3AED" }}>
           {getEmoji(eng.x_studio_engagement_type)} {eng.x_studio_engagement_type || "—"}
         </span>
+        {eng.x_studio_engagement_with && (
+          <div style={{ marginTop: 4, fontSize: 10, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            With: {eng.x_studio_engagement_with}
+          </div>
+        )}
       </div>
 
       {/* Company */}

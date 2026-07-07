@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchOdoo } from "../lib/odoo";
-import { LeadCard } from "./PipelineTab";
 
 // ─── Theme tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -185,6 +184,7 @@ function Pill({ engagement, lead, isFollowUp, empMap, isSelected, onClick }) {
   const tooltipLines = [
     `Customer: ${customerName}`,
     `Type: ${engagement.x_studio_engagement_type || "—"}`,
+    engagement.x_studio_engagement_with ? `With: ${engagement.x_studio_engagement_with}` : null,
     lead?.expected_revenue > 0 ? `Deal: ${fmt(lead.expected_revenue)}` : null,
     `Status: ${status}`,
     `${displayDateLabel}: ${fmtDate(displayDate)}`,
@@ -296,7 +296,7 @@ const getDisplayDateMeta = (engagement) => {
   if (engagement?.x_studio_proposed_date) {
     return {
       date: engagement.x_studio_proposed_date,
-      label: "Proposed",
+      label: "Planned Date",
       color: T.textPrimary,
     };
   }
@@ -311,10 +311,111 @@ const getDisplayDateMeta = (engagement) => {
 
   return {
     date: null,
-    label: "Proposed",
+    label: "Planned Date",
     color: T.textMuted,
   };
 };
+
+function ActivityDetailCard({ engagement, lead, empMap, onClose }) {
+  if (!engagement) return null;
+
+  const status = engagement.x_studio_engagement_status || "Unknown";
+  const statusCfg = STATUS_CONFIG[status] || STATUS_CONFIG.Unknown;
+  const company = lead?.partner_id?.[1] || engagement.x_crm_lead_id?.[1] || "—";
+  const assignedTo = (Array.isArray(engagement.x_studio_visit_by) ? engagement.x_studio_visit_by : [])
+    .map((person) => resolveEmpName(person, empMap))
+    .filter(Boolean)
+    .join(", ") || "—";
+  const orderValue = lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—";
+  const remarks = engagement.x_studio_remarkscomments || engagement.x_studio_remarkscommments || "—";
+  const { date: detailDate, label: detailLabel } = getDisplayDateMeta(engagement);
+
+  const Field = ({ label, value, color }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 14, color: color || T.textPrimary, fontWeight: 500, lineHeight: 1.45, wordBreak: "break-word" }}>
+        {value || "—"}
+      </div>
+    </div>
+  );
+
+  return (
+    <div
+      style={{
+        border: `1px solid ${T.border}`,
+        borderRadius: 12,
+        background: T.bgCard,
+        padding: "18px 20px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 18,
+        animation: "fadeIn 0.25s ease",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: T.textPrimary }}>Activity Detail</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 100, background: statusCfg.bg, color: statusCfg.text }}>
+            {status}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ background: T.bgInput, border: `1px solid ${T.border}`, borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontSize: 13, color: T.textSecondary, fontFamily: "inherit" }}
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "18px 28px" }}>
+        <Field label="Customer" value={company} />
+        <Field label="Deal Value" value={orderValue} color={orderValue !== "—" ? T.success : T.textMuted} />
+        <Field label="Engagement Type" value={engagement.x_studio_engagement_type || "—"} />
+        <Field label="Engagement With" value={engagement.x_studio_engagement_with || "—"} />
+        <Field label="Assigned To" value={assignedTo} />
+        <Field label={detailLabel} value={fmtDate(detailDate)} />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", marginBottom: 6 }}>
+          Remarks / Comments
+        </div>
+        <div style={{ fontSize: 14, color: remarks === "—" ? T.textMuted : T.textPrimary, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+          {remarks}
+        </div>
+      </div>
+
+      {lead?.id && (
+        <div>
+          <a
+            href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              padding: "8px 12px",
+              borderRadius: 8,
+              fontSize: 12,
+              fontWeight: 600,
+              background: T.accentBg,
+              color: T.accent,
+              border: `1px solid ${T.accentBdr}`,
+              textDecoration: "none",
+            }}
+          >
+            View in Odoo →
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── ListView component ───────────────────────────────────────────────────────
 function ListView({ engagements, leadMap, empMap, daySet, allPeople, selectedPeople, selectedStatuses, selectedPill, onRowClick }) {
@@ -474,6 +575,11 @@ function ListRow({ e, lead, status, cfg, isAnomaly, personNames, personColorMap,
         }}>
           {getTypeEmoji(e.x_studio_engagement_type)} {e.x_studio_engagement_type || "—"}
         </span>
+        {e.x_studio_engagement_with && (
+          <div style={{ marginTop: 4, fontSize: 10, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            With: {e.x_studio_engagement_with}
+          </div>
+        )}
       </div>
 
       {/* Status pill with anomaly flag */}
@@ -604,7 +710,7 @@ export default function SwimlaneView() {
         fields: [
           "x_studio_proposed_date", "x_studio_rescheduled_date",
           "x_studio_engagement_type", "x_studio_engagement_status",
-          "x_studio_visit_by", "x_crm_lead_id", "x_studio_remarkscommments",
+          "x_studio_visit_by", "x_crm_lead_id", "x_studio_remarkscommments", "x_studio_engagement_with",
         ],
         limit: 1000,
       });
@@ -1003,9 +1109,11 @@ export default function SwimlaneView() {
           {/* ── Detail panel (shared) ── */}
           {selectedEngagement && leadMap[selectedEngagement.x_crm_lead_id?.[0]] && (
             <div style={{ marginBottom: 12, marginTop: 12 }}>
-              <LeadCard 
-                lead={leadMap[selectedEngagement.x_crm_lead_id?.[0]]} 
-                onClose={() => setSelectedPill(null)} 
+              <ActivityDetailCard
+                engagement={selectedEngagement}
+                lead={leadMap[selectedEngagement.x_crm_lead_id?.[0]]}
+                empMap={empMap}
+                onClose={() => setSelectedPill(null)}
               />
             </div>
           )}

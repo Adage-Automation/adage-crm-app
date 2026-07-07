@@ -1,16 +1,160 @@
 import { useState, useMemo, useRef, useEffect } from "react";
+import ReactDOM from "react-dom";
 import { T } from "../constants/theme";
 import { REGION_COLORS, PERSON_COLORS } from "../constants/colors";
-import { fmt } from "../lib/format";
+import { fmt, getPersonNames } from "../lib/format";
+import HealthSpeedometer from "../components/HealthSpeedometer";
+import HealthTag, {
+  AGGREGATE_TOOLTIP_TEXT,
+  getClosestHealthTier,
+  hasAnyActivity,
+  hasCompletedActivity,
+  HEALTH_POSITIONS,
+} from "../components/HealthTag";
 
 // ─── Local constants ──────────────────────────────────────────────────────────
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const fmtShort = (iso) => {
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
   if (!iso) return null;
   const [y, m, d] = iso.split("T")[0].split("-").map(Number);
   const dt = new Date(y, m - 1, d);
   return `${dt.getDate()} ${MONTHS_SHORT[dt.getMonth()]}, ${DAYS_SHORT[dt.getDay()]}`;
+};
+
+const parseISODate = (iso) => {
+  if (!iso) return null;
+  const [y, m, d] = iso.split("T")[0].split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+
+const addMonths = (date, months) => {
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + months);
+  return d;
+};
+
+const toDateInput = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+const getQuarterRange = (date) => {
+  const y = date.getFullYear();
+  const qStartMonth = Math.floor(date.getMonth() / 3) * 3;
+  const start = new Date(y, qStartMonth, 1);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(y, qStartMonth + 3, 0);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
+
+const getMonthRange = (date) => {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
+
+const getActiveHorizonLabel = (expectedClosingISO) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const d = parseISODate(expectedClosingISO);
+  if (!d) return "Unclosed Active Prospects";
+  d.setHours(0, 0, 0, 0);
+
+  if (d < today) return "Unclosed Active Prospects";
+
+  const currentYear = today.getFullYear();
+  const nextYear = currentYear + 1;
+
+  if (d.getFullYear() === currentYear && d.getMonth() === today.getMonth()) {
+    return "This Month";
+  }
+
+  if (d.getFullYear() === currentYear && d.getMonth() >= 6 && d.getMonth() <= 8) {
+    return "This Quarter (Jul-Sep)";
+  }
+
+  if (d.getFullYear() === currentYear && d.getMonth() >= 9 && d.getMonth() <= 11) {
+    return "Next Quarter (Oct-Dec)";
+  }
+
+  if (d.getFullYear() === nextYear) {
+    return "Next Year";
+  }
+
+  return "Unclosed Active Prospects";
+};
+
+const getActiveBucketKey = (lead) => `ACTIVE • ${getActiveHorizonLabel(lead?.x_studio_expected_closing)}`;
+
+const startOfYear = (y) => {
+  const d = new Date(y, 0, 1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+const endOfYear = (y) => {
+  const d = new Date(y, 11, 31);
+  d.setHours(23, 59, 59, 999);
+  return d;
+};
+const getPeriodRange = (key, today) => {
+  const y = today.getFullYear();
+  if (key === "All Time") return null;
+  if (key === "This Month") return getMonthRange(today);
+  if (key === "This Quarter") return getQuarterRange(today);
+  if (key === "This Year") return { start: startOfYear(y), end: endOfYear(y) };
+  if (key === "Last 6 Months") {
+    const start = addMonths(today, -6);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(today);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+  if (key === "Last 12 Months") {
+    const start = addMonths(today, -12);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(today);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+  return null;
+};
+
+const stripActivePrefix = (label) => String(label || "").replace(/^ACTIVE\s*•\s*/i, "");
+const getUrgencyMeta = (closingDate) => {
+  if (!closingDate) return { label: "—", type: "none", bg: "#d1d5db", text: "#9ca3af" };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const parsed = parseISODate(closingDate);
+  if (!parsed) return { label: "—", type: "none", bg: "#d1d5db", text: "#9ca3af" };
+  parsed.setHours(0, 0, 0, 0);
+  const diffDays = Math.floor((parsed - today) / 86400000);
+  if (diffDays < 0) return { label: "OVERDUE", type: "overdue", bg: "#ef4444", text: "#ffffff" };
+  if (diffDays === 0) return { label: "TODAY", type: "today", bg: "#FF4500", text: "#ffffff" };
+  if (diffDays === 1) return { label: "TOMORROW", type: "tomorrow", bg: "#E38B00", text: "#ffffff" };
+  if (diffDays <= 7) return { label: "THIS WEEK", type: "week", bg: "#eab308", text: "#ffffff" };
+  return { label: "UPCOMING", type: "upcoming", bg: "#22c55e", text: "#ffffff" };
 };
 
 const URGENCY = {
@@ -42,11 +186,17 @@ const STATUS_PILL = {
 const getPill = (val) => STATUS_PILL[val] || { bg: "#F3F4F6", text: "#374151" };
 
 // ─── MultiSelect (same pattern as VisitsTab) ──────────────────────────────────
-function MultiSelect({ label, options, selected, onChange }) {
+function MultiSelect({ label, options, selected, onChange, searchable = false, searchPlaceholder = "Search..." }) {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const ref = useRef(null);
   useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const h = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        setSearchQuery("");
+      }
+    };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
@@ -54,9 +204,18 @@ function MultiSelect({ label, options, selected, onChange }) {
     onChange(selected.includes(val) ? selected.filter(v => v !== val) : [...selected, val]);
   const isActive = selected.length > 0;
   const btnLabel = !isActive ? label : selected.length === 1 ? selected[0] : `${label} (${selected.length})`;
+  const visibleOptions = searchable
+    ? options.filter((opt) => String(opt).toLowerCase().includes(searchQuery.toLowerCase()))
+    : options;
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <button onClick={() => setOpen(o => !o)} style={{
+      <button onClick={() => {
+        setOpen((o) => {
+          const next = !o;
+          if (!next) setSearchQuery("");
+          return next;
+        });
+      }} style={{
         padding: "5px 14px", borderRadius: 100,
         border: `1px solid ${isActive ? T.accent : T.border}`,
         background: isActive ? T.accentBg : T.bgCard,
@@ -69,7 +228,52 @@ function MultiSelect({ label, options, selected, onChange }) {
       </button>
       {open && (
         <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 300, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", minWidth: 180, maxHeight: 240, overflowY: "auto" }}>
-          {options.map(opt => (
+          {searchable && (
+            <div style={{ padding: 8, borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={searchPlaceholder}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: "100%",
+                  padding: "7px 10px",
+                  borderRadius: 8,
+                  border: `1px solid ${T.border}`,
+                  background: T.bgInput,
+                  color: T.textPrimary,
+                  fontFamily: "inherit",
+                  fontSize: 12,
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+              {selected.length > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChange([]);
+                  }}
+                  style={{
+                    padding: "7px 10px",
+                    borderRadius: 8,
+                    border: `1px solid ${T.border}`,
+                    background: T.bgCard,
+                    color: T.textMuted,
+                    fontFamily: "inherit",
+                    fontSize: 12,
+                    cursor: "pointer",
+                    flexShrink: 0,
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
+          {visibleOptions.map(opt => (
             <div key={opt} onClick={() => toggle(opt)} style={{ padding: "8px 12px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, background: selected.includes(opt) ? T.accentBg : "transparent", color: selected.includes(opt) ? T.accent : T.textPrimary }}>
               <div style={{ width: 14, height: 14, flexShrink: 0, borderRadius: 3, border: `1.5px solid ${selected.includes(opt) ? T.accent : T.borderMd}`, background: selected.includes(opt) ? T.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 {selected.includes(opt) && <span style={{ color: "#fff", fontSize: 9, lineHeight: 1 }}>✓</span>}
@@ -77,15 +281,233 @@ function MultiSelect({ label, options, selected, onChange }) {
               {opt}
             </div>
           ))}
-          {options.length === 0 && <div style={{ padding: "10px 12px", fontSize: 12, color: T.textMuted }}>No options</div>}
+          {visibleOptions.length === 0 && <div style={{ padding: "10px 12px", fontSize: 12, color: T.textMuted }}>No options</div>}
         </div>
       )}
     </div>
   );
 }
 
+function FilterSelect({ value, onChange, options, width = 150 }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={{
+        width,
+        minWidth: width,
+        padding: "6px 28px 6px 12px",
+        borderRadius: 999,
+        border: `1px solid ${T.border}`,
+        background: T.bgCard,
+        color: T.accent,
+        fontSize: 12,
+        fontWeight: 600,
+        fontFamily: "inherit",
+        outline: "none",
+        cursor: "pointer",
+      }}
+    >
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
+  );
+}
+
+function UrgencyBadge({ closingDate, leadStatus }) {
+  if (leadStatus !== "ACTIVE") {
+    return <span style={{ color: "#d1d5db", fontSize: 13, whiteSpace: "nowrap" }}>—</span>;
+  }
+  const meta = getUrgencyMeta(closingDate);
+  if (meta.type === "none") {
+    return <span style={{ color: "#d1d5db", fontSize: 13, whiteSpace: "nowrap" }}>—</span>;
+  }
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: "0.5px",
+        padding: "2px 6px",
+        borderRadius: 3,
+        color: meta.text,
+        background: meta.bg,
+        marginTop: 3,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {meta.label}
+    </span>
+  );
+}
+
+function formatClosingCellDate(iso) {
+  if (!iso) return "No date";
+  const dt = parseISODate(iso);
+  if (!dt) return "No date";
+  return `${dt.getDate()} ${MONTHS_SHORT[dt.getMonth()]} ${dt.getFullYear()}`;
+}
+
+function formatSimpleDate(iso) {
+  if (!iso) return "—";
+  const dt = parseISODate(iso);
+  if (!dt) return "—";
+  return `${dt.getDate()} ${MONTHS_SHORT[dt.getMonth()]} ${dt.getFullYear()}`;
+}
+
+function getEngagementDisplayDateMeta(engagement) {
+  const status = engagement?.x_studio_engagement_status;
+  if (status === "Rescheduled" && engagement?.x_studio_rescheduled_date) {
+    return {
+      date: engagement.x_studio_rescheduled_date,
+      label: "Rescheduled",
+      detailLabel: "Rescheduled Date",
+      color: "#F59E0B",
+      bg: "rgba(245,158,11,0.14)",
+    };
+  }
+  if (engagement?.x_studio_proposed_date) {
+    return {
+      date: engagement.x_studio_proposed_date,
+      label: "Planned Date",
+      detailLabel: "Planned Date",
+      color: "#64748B",
+      bg: "rgba(100,116,139,0.12)",
+    };
+  }
+  if (engagement?.x_studio_rescheduled_date) {
+    return {
+      date: engagement.x_studio_rescheduled_date,
+      label: "Rescheduled",
+      detailLabel: "Rescheduled Date",
+      color: "#F59E0B",
+      bg: "rgba(245,158,11,0.14)",
+    };
+  }
+  return {
+    date: null,
+    label: "Planned Date",
+    detailLabel: "Planned Date",
+    color: T.textMuted,
+    bg: T.bgInput,
+  };
+}
+
+function getPrimaryEngagement(engagements) {
+  if (!Array.isArray(engagements) || engagements.length === 0) return null;
+  const statusOrder = { Rescheduled: 0, Planned: 1, Completed: 2, Cancelled: 3 };
+  return [...engagements].sort((a, b) => {
+    const sa = statusOrder[a?.x_studio_engagement_status] ?? 99;
+    const sb = statusOrder[b?.x_studio_engagement_status] ?? 99;
+    if (sa !== sb) return sa - sb;
+
+    const da = parseISODate(getEngagementDisplayDateMeta(a).date);
+    const db = parseISODate(getEngagementDisplayDateMeta(b).date);
+    if (da && db) return da - db;
+    if (da) return -1;
+    if (db) return 1;
+    return (a?.id || 0) - (b?.id || 0);
+  })[0];
+}
+
+function ActivityDetailModal({ engagement, lead, userMap, onClose }) {
+  if (!engagement) return null;
+
+  const status = engagement.x_studio_engagement_status || "Unknown";
+  const assignedTo = getPersonNames(engagement.x_studio_visit_by, userMap);
+  const customer = lead?.partner_id?.[1] || engagement.x_crm_lead_id?.[1] || "—";
+  const remarks = engagement.x_studio_remarkscomments || engagement.x_studio_remarkscommments || "—";
+  const { date: detailDate, detailLabel, label: datePillLabel, color: datePillColor, bg: datePillBg } = getEngagementDisplayDateMeta(engagement);
+  const statusColors = { Planned: T.accent, Completed: T.success, Cancelled: T.danger, Rescheduled: "#F59E0B" };
+  const statusBgs = { Planned: T.accentBg, Completed: T.successBg, Cancelled: T.dangerBg, Rescheduled: T.warningBg };
+
+  const Field = ({ label, value, color }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>{label}</div>
+      <div style={{ fontSize: 14, color: color || T.textPrimary, fontWeight: 500, lineHeight: 1.5, wordBreak: "break-word" }}>{value || "—"}</div>
+    </div>
+  );
+
+  return ReactDOM.createPortal(
+    <div
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,23,42,0.24)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter', 'Plus Jakarta Sans', 'Segoe UI', sans-serif" }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="card fade-in"
+        style={{ position: "relative", zIndex: 1001, width: 620, maxWidth: "90vw", maxHeight: "85vh", overflowY: "auto", padding: "20px 22px", borderRadius: 14, background: T.bgCard, border: `1px solid ${T.border}`, boxShadow: "0 12px 28px rgba(15,23,42,0.12)" }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: T.textPrimary }}>Activity Detail</div>
+            <span className="pill" style={{ background: statusBgs[status] || T.bgInput, color: statusColors[status] || T.textMuted, fontSize: 10, fontWeight: 700 }}>{status}</span>
+          </div>
+          <button onClick={onClose} style={{ background: T.bgInput, border: `1px solid ${T.border}`, fontSize: 16, cursor: "pointer", color: T.textMuted, lineHeight: 1, padding: "6px 10px", borderRadius: 8, fontFamily: "inherit" }}>✕</button>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "18px 24px", marginBottom: 16 }}>
+          <Field label="Customer" value={customer} />
+          <Field label="Opportunity" value={lead?.name || engagement.x_crm_lead_id?.[1]} />
+          <Field label="Engagement Type" value={engagement.x_studio_engagement_type || "—"} />
+          <Field label="Engagement With" value={engagement.x_studio_engagement_with || "—"} />
+          <Field label="Assigned To" value={assignedTo} />
+          <Field label="Expected Value" value={lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—"} color={lead?.expected_revenue > 0 ? T.success : T.textMuted} />
+          <Field label="Region" value={lead?.x_studio_responsible_region_1 || "—"} color={REGION_COLORS[lead?.x_studio_responsible_region_1] || T.textPrimary} />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "18px 24px", marginBottom: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>{detailLabel}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              {datePillLabel === "Rescheduled" && (
+                <span className="pill" style={{ background: datePillBg, color: datePillColor }}>{datePillLabel}</span>
+              )}
+              <span style={{ fontSize: 14, color: datePillColor, fontWeight: 600 }}>{formatSimpleDate(detailDate)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 14 }}>
+          <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", marginBottom: 6 }}>Remarks / Comments</div>
+          <div style={{ fontSize: 14, color: remarks === "—" ? T.textMuted : T.textPrimary, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{remarks}</div>
+        </div>
+
+        {lead?.id && (
+          <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-start" }}>
+            <a
+              href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                padding: "8px 12px",
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 600,
+                background: T.accentBg,
+                color: T.accent,
+                border: `1px solid ${T.accentBdr}`,
+                textDecoration: "none",
+              }}
+            >
+              View in Odoo →
+            </a>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ─── Lead Card (used in both List and Kanban views) ───────────────────────────
-export function LeadCard({ lead, onClose }) {
+export function LeadCard({ lead, onClose, uniform = false }) {
   const [hovered, setHovered] = useState(false);
   if (!lead) return null;
   const urg = URGENCY[getUrgency(lead.x_studio_expected_closing)];
@@ -95,11 +517,83 @@ export function LeadCard({ lead, onClose }) {
   const pill = getPill(statusVal);
 
   const Field = ({ label, value, color }) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
       <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 600, letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 12, color: color || T.textPrimary, fontWeight: 500, lineHeight: 1.35 }}>{value || "—"}</div>
+      <div style={{ fontSize: 12, color: color || T.textPrimary, fontWeight: 500, lineHeight: 1.35, overflowWrap: "anywhere", wordBreak: "break-word", ...(uniform ? { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } : null) }}>{value || "—"}</div>
     </div>
   );
+
+  if (uniform) {
+    return (
+      <div
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          background: hovered ? T.bgCardAlt : T.bgCard,
+          border: `1px solid ${T.border}`,
+          boxShadow: hovered ? T.shadowMd : T.shadowSm,
+          borderRadius: 12,
+          padding: "10px 12px",
+          transition: "all 0.15s",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          minHeight: 188,
+          height: "100%",
+        }}
+      >
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          {statusVal && (
+            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 100, background: pill.bg, color: pill.text }}>
+              {statusVal}
+            </span>
+          )}
+          {lead.x_studio_project_background && (
+            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: getProjectTypePill(lead.x_studio_project_background).bg, color: getProjectTypePill(lead.x_studio_project_background).color }}>
+              {lead.x_studio_project_background}
+            </span>
+          )}
+          {lead.x_studio_responsible_region_1 && (
+            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: `${regionColor}18`, color: regionColor }}>
+              {lead.x_studio_responsible_region_1}
+            </span>
+          )}
+        </div>
+
+        <div style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minHeight: 35 }}>
+          {lead.name}
+        </div>
+
+        <div style={{ fontSize: 11, color: T.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {lead.partner_id?.[1] || lead.partner_name || "—"}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 10px" }}>
+          <Field label="Salesperson" value={lead.x_studio_assigned_salesperson?.[1]} />
+          <Field label="Deal Value" value={lead.expected_revenue > 0 ? fmt(lead.expected_revenue) : null} color={T.success} />
+          <Field label="Closing" value={closingDate || "No date"} color={closingDate ? urg.dateColor : T.textMuted} />
+          <Field label="Sales Lead" value={lead.x_studio_sales_lead?.[1]} />
+        </div>
+
+        <div style={{ marginTop: "auto", paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
+          <a
+            href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              padding: "7px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+              background: T.accentBg, color: T.accent, border: `1px solid ${T.accentBdr}`,
+              textDecoration: "none", transition: "background 0.15s, box-shadow 0.15s",
+              letterSpacing: "0.2px",
+            }}
+          >
+            View in Odoo →
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -110,14 +604,13 @@ export function LeadCard({ lead, onClose }) {
         border: `1px solid ${T.border}`,
         boxShadow: hovered ? T.shadowMd : T.shadowSm,
         borderRadius: 12,
-        padding: "12px 14px",
+        padding: "10px 12px",
         transition: "all 0.15s",
         marginBottom: onClose ? 12 : 8,
         marginTop: onClose ? 8 : 0,
         display: "flex",
         flexDirection: "column",
-        gap: 10,
-        height: "100%",
+        gap: 8,
         position: "relative"
       }}
     >
@@ -125,72 +618,66 @@ export function LeadCard({ lead, onClose }) {
         <button onClick={onClose} style={{ position: "absolute", top: 10, right: 10, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: "50%", cursor: "pointer", fontSize: 14, color: T.textMuted, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}>×</button>
       )}
 
-      {/* Row 1: Status + project type + region tags */}
-      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", paddingRight: onClose ? 24 : 0 }}>
-        {statusVal && (
-          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 100, background: pill.bg, color: pill.text }}>
-            {statusVal}
-          </span>
-        )}
-        {lead.x_studio_project_background && (
-          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: getProjectTypePill(lead.x_studio_project_background).bg, color: getProjectTypePill(lead.x_studio_project_background).color }}>
-            {lead.x_studio_project_background}
-          </span>
-        )}
-        {lead.x_studio_responsible_region_1 && (
-          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: `${regionColor}18`, color: regionColor }}>
-            {lead.x_studio_responsible_region_1}
-          </span>
-        )}
-      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0 }}>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", paddingRight: onClose ? 24 : 0 }}>
+          {statusVal && (
+            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 100, background: pill.bg, color: pill.text }}>
+              {statusVal}
+            </span>
+          )}
+          {lead.x_studio_project_background && (
+            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: getProjectTypePill(lead.x_studio_project_background).bg, color: getProjectTypePill(lead.x_studio_project_background).color }}>
+              {lead.x_studio_project_background}
+            </span>
+          )}
+          {lead.x_studio_responsible_region_1 && (
+            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: `${regionColor}18`, color: regionColor }}>
+              {lead.x_studio_responsible_region_1}
+            </span>
+          )}
+        </div>
 
-      {/* Row 2: Lead name with urgency dot */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
-        {closingDate && (
-          <span style={{
-            display: "inline-block", width: 8, height: 8, borderRadius: "50%",
-            background: urg.border === "transparent" ? "transparent" : urg.border,
-            flexShrink: 0, marginTop: 4,
-          }} />
-        )}
-        <div style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary, lineHeight: 1.4, wordBreak: "break-word" }}>
-          {lead.name}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+          {closingDate && (
+            <span style={{
+              display: "inline-block", width: 8, height: 8, borderRadius: "50%",
+              background: urg.border === "transparent" ? "transparent" : urg.border,
+              flexShrink: 0, marginTop: 4,
+            }} />
+          )}
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary, lineHeight: 1.4, wordBreak: "break-word", ...(uniform ? { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" } : null) }}>
+            {lead.name}
+          </div>
+        </div>
+
+        <Field label="Company" value={lead.partner_id?.[1] || lead.partner_name} />
+
+        <div style={{ display: "grid", gridTemplateColumns: onClose ? "repeat(auto-fit, minmax(140px, 1fr))" : "1fr 1fr", gap: "6px 10px" }}>
+          <Field label="Salesperson" value={lead.x_studio_assigned_salesperson?.[1]} />
+          <Field label="Sales Lead" value={lead.x_studio_sales_lead?.[1]} />
+          <Field label="Deal Value" value={lead.expected_revenue > 0 ? fmt(lead.expected_revenue) : null} color={T.success} />
+          <Field label="Lead Status" value={lead.x_studio_lead_status} />
+          <Field label="Closing" value={closingDate || "No date"} color={closingDate ? urg.dateColor : T.textMuted} />
         </div>
       </div>
 
-      {/* Row 3: Company */}
-      <Field label="Company" value={lead.partner_id?.[1] || lead.partner_name} />
-
-      {/* Row 4: Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: onClose ? "repeat(auto-fit, minmax(140px, 1fr))" : "1fr 1fr", gap: "8px 12px" }}>
-        <Field label="Salesperson" value={lead.x_studio_assigned_salesperson?.[1]} />
-        <Field label="Sales Lead" value={lead.x_studio_sales_lead?.[1]} />
-        <Field label="Deal Value" value={lead.expected_revenue > 0 ? fmt(lead.expected_revenue) : null} color={T.success} />
-        <Field label="Lead Status" value={lead.x_studio_lead_status} />
-        <Field label="Closing" value={closingDate || "No date"} color={closingDate ? urg.dateColor : T.textMuted} />
+      <div style={{ marginTop: "auto" }}>
+        <div style={{ height: 1, background: T.border, marginBottom: 8 }} />
+        <a
+          href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+            background: T.accentBg, color: T.accent, border: `1px solid ${T.accentBdr}`,
+            textDecoration: "none", transition: "background 0.15s, box-shadow 0.15s",
+            letterSpacing: "0.2px",
+          }}
+        >
+          View in Odoo →
+        </a>
       </div>
-
-      {/* Spacer */}
-      <div style={{ flex: 1 }} />
-
-      {/* Divider */}
-      <div style={{ height: 1, background: T.border }} />
-
-      {/* View in Odoo button */}
-      <a
-        href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-          padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-          background: T.accentBg, color: T.accent, border: `1px solid ${T.accentBdr}`,
-          textDecoration: "none", transition: "background 0.15s, box-shadow 0.15s",
-          letterSpacing: "0.2px",
-        }}
-      >
-        View in Odoo →
-      </a>
     </div>
   );
 }
@@ -207,11 +694,11 @@ const getProjectTypePill = (type) =>
 // STATUS_COLORS replaced by getPill() / STATUS_PILL at the top of file.
 
 // ─── Reusable interactive donut ──────────────────────────────────────────────
-function InteractiveDonut({ title, segments, total, centerLabel, onSegmentClick, activeKey }) {
+function InteractiveDonut({ title, segments, total, centerLabel, onSegmentClick, activeKey, legendMaxHeight = null }) {
   const [hoveredKey, setHoveredKey] = useState(null);
-  const size = 140, cx = size / 2, cy = size / 2;
-  const R_BASE = 52, R_HOVER = 56;
-  const SW_BASE = 18, SW_HOVER = 14;
+  const size = 120, cx = size / 2, cy = size / 2;
+  const R_BASE = 44, R_HOVER = 48;
+  const SW_BASE = 14, SW_HOVER = 11;
   const circ_base = 2 * Math.PI * R_BASE;
   const circ_hover = 2 * Math.PI * R_HOVER;
 
@@ -228,12 +715,12 @@ function InteractiveDonut({ title, segments, total, centerLabel, onSegmentClick,
   const hovered = hoveredKey ? segs.find(s => s.key === hoveredKey) : null;
 
   return (
-    <div className="card" style={{ padding: "20px 22px" }}>
-      <div style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.8px", textTransform: "uppercase", fontWeight: 600, marginBottom: 14 }}>{title}</div>
+    <div className="card" style={{ padding: "14px 16px" }}>
+      <div style={{ fontSize: 10, color: T.textMuted, letterSpacing: "0.8px", textTransform: "uppercase", fontWeight: 700, marginBottom: 10 }}>{title}</div>
       {segs.length === 0 ? (
-        <div style={{ color: T.textMuted, fontSize: 12, textAlign: "center", padding: "24px 0" }}>No data</div>
+        <div style={{ color: T.textMuted, fontSize: 12, textAlign: "center", padding: "18px 0" }}>No data</div>
       ) : (
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
           <div style={{ position: "relative", flexShrink: 0 }}>
             <svg width={size} height={size} style={{ transform: "rotate(-90deg)", overflow: "visible" }}>
               {/* Background track */}
@@ -279,10 +766,10 @@ function InteractiveDonut({ title, segments, total, centerLabel, onSegmentClick,
               })}
             </svg>
             {/* Center label overlay — pointer-events none so it never blocks SVG events */}
-            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none", textAlign: "center", padding: "0 8px" }}>
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none", textAlign: "center", padding: "0 6px" }}>
               {hovered ? (
                 <>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: hovered.color, lineHeight: 1.2, maxWidth: 60 }}>{hovered.key}</div>
+                  <div style={{ fontSize: 9, fontWeight: 800, color: hovered.color, lineHeight: 1.2, maxWidth: 66 }}>{hovered.displayKey || hovered.key}</div>
                   <div style={{ fontSize: 11, fontWeight: 800, color: T.textPrimary, marginTop: 2 }}>{fmt(hovered.rev)}</div>
                   <div style={{ fontSize: 9, color: T.textMuted }}>{hovered.count} leads</div>
                 </>
@@ -295,7 +782,7 @@ function InteractiveDonut({ title, segments, total, centerLabel, onSegmentClick,
             </div>
           </div>
           {/* Legend */}
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0, maxHeight: legendMaxHeight || undefined, overflowY: legendMaxHeight ? "auto" : "visible", paddingRight: legendMaxHeight ? 4 : 0 }}>
             {segs.map(seg => {
               const isActive = activeKey === seg.key;
               return (
@@ -304,7 +791,7 @@ function InteractiveDonut({ title, segments, total, centerLabel, onSegmentClick,
                   onMouseEnter={() => setHoveredKey(seg.key)}
                   onMouseLeave={() => setHoveredKey(null)}
                   style={{
-                    display: "flex", alignItems: "center", gap: 8, marginBottom: 7,
+                    display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 7,
                     cursor: "pointer",
                     opacity: hoveredKey && hoveredKey !== seg.key ? 0.4 : 1,
                     transition: "opacity 0.15s",
@@ -313,9 +800,15 @@ function InteractiveDonut({ title, segments, total, centerLabel, onSegmentClick,
                     borderRadius: 4, paddingLeft: 5,
                   }}>
                   <div style={{ width: 8, height: 8, borderRadius: "50%", background: seg.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: T.textSecondary, flex: 1 }}>{seg.key}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: T.textPrimary }}>{fmt(seg.rev)}</span>
-                  <span style={{ fontSize: 10, color: T.textMuted }}>{seg.count}</span>
+                  <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 }}>
+                    <span title={seg.displayKey || seg.key} style={{ fontSize: 11, color: T.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {seg.displayKey || seg.key}
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                      <span style={{ fontSize: 10, color: T.textMuted, whiteSpace: "nowrap" }}>{fmt(seg.rev)}</span>
+                      <span style={{ fontSize: 10, color: T.textMuted, whiteSpace: "nowrap" }}>{seg.count}</span>
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -326,19 +819,32 @@ function InteractiveDonut({ title, segments, total, centerLabel, onSegmentClick,
   );
 }
 
-function RevenueDonut({ leads, onSegmentClick, activeKey }) {
+function RevenueDonut({ leads, onSegmentClick, activeKey, breakdownEnabled }) {
   const byStatus = {};
   leads.forEach(l => {
     const s = l.x_studio_lead_status ? String(l.x_studio_lead_status).trim() : null;
     if (!s) return;
-    if (!byStatus[s]) byStatus[s] = { rev: 0, count: 0, color: getPill(s).text };
-    byStatus[s].rev += l.expected_revenue || 0;
-    byStatus[s].count += 1;
+    const key = s === "ACTIVE" && breakdownEnabled ? getActiveBucketKey(l) : s;
+    const activeBucketColors = {
+      "ACTIVE • This Month": "#EA580C",
+      "ACTIVE • This Quarter (Jul-Sep)": "#D97706",
+      "ACTIVE • Next Quarter (Oct-Dec)": "#02818A",
+      "ACTIVE • Next Year": "#7C3AED",
+      "ACTIVE • Unclosed Active Prospects": "#DC2626",
+    };
+    const color = s === "ACTIVE" && breakdownEnabled
+      ? (activeBucketColors[key] || "#EA9400")
+      : getPill(s).text;
+    if (!byStatus[key]) byStatus[key] = { rev: 0, count: 0, color };
+    byStatus[key].rev += l.expected_revenue || 0;
+    byStatus[key].count += 1;
   });
-  const entries = Object.entries(byStatus).filter(([, d]) => d.rev > 0).sort((a, b) => b[1].rev - a[1].rev);
+  const entries = Object.entries(byStatus)
+    .filter(([, d]) => d.rev > 0)
+    .sort((a, b) => b[1].rev - a[1].rev);
   const total = entries.reduce((s, [, d]) => s + d.rev, 0) || 1;
-  const segments = entries.map(([key, d]) => ({ key, ...d }));
-  return <InteractiveDonut title="Revenue by Lead Status" segments={segments} total={total} centerLabel="Pipeline" onSegmentClick={onSegmentClick} activeKey={activeKey} />;
+  const segments = entries.map(([key, d]) => ({ key, displayKey: stripActivePrefix(key), ...d }));
+  return <InteractiveDonut title="REVENUE BY LEAD STATUS" segments={segments} total={total} centerLabel="Pipeline" onSegmentClick={onSegmentClick} activeKey={activeKey} />;
 }
 
 function RegionDonut({ leads, onSegmentClick, activeKey }) {
@@ -373,10 +879,28 @@ function PersonDonut({ leads, onSegmentClick, activeKey }) {
   return <InteractiveDonut title="Revenue by Assigned Person" segments={segments} total={total} centerLabel="Pipeline" onSegmentClick={onSegmentClick} activeKey={activeKey} />;
 }
 
+function CustomerDonut({ leads, onSegmentClick, activeKey }) {
+  const byCustomer = {};
+  leads.forEach((l) => {
+    const k = l.partner_id?.[1] || l.partner_name || "No Customer";
+    if (!byCustomer[k]) byCustomer[k] = { rev: 0, count: 0, color: null };
+    byCustomer[k].rev += l.expected_revenue || 0;
+    byCustomer[k].count += 1;
+  });
+
+  const entries = Object.entries(byCustomer).filter(([, d]) => d.rev > 0).sort((a, b) => b[1].rev - a[1].rev);
+  const total = entries.reduce((s, [, d]) => s + d.rev, 0) || 1;
+  const keys = entries.map(([k]) => k);
+  const colorMap = {};
+  keys.forEach((k, i) => { colorMap[k] = PERSON_COLORS[i % PERSON_COLORS.length]; });
+  const segments = entries.map(([key, d]) => ({ key, ...d, color: colorMap[key] }));
+  return <InteractiveDonut title="Revenue by Customer" segments={segments} total={total} centerLabel="Pipeline" onSegmentClick={onSegmentClick} activeKey={activeKey} legendMaxHeight={136} />;
+}
+
 // ─── Greenfield vs Brownfield pie chart ──────────────────────────────────────
 const GB_PIE_COLORS = {
   "Greenfield": { bg: "rgba(16,185,129,0.12)", solid: "#059669" },
-  "Brownfield": { bg: "rgba(120,80,40,0.12)", solid: "#7C4F28" },
+  "Brownfield": { bg: "rgba(120,80,40,0.12)", solid: "#8B5A2B" },
 };
 
 function GreenfieldDonut({ leads, onSegmentClick, activeKey }) {
@@ -398,13 +922,21 @@ function GreenfieldDonut({ leads, onSegmentClick, activeKey }) {
 // ─── MonthBar — owns its own hover state (fixes useState-in-map violation) ────
 function MonthBar({ monthKey, data, isSelected, maxRev, onBarClick }) {
   const [hovered, setHovered] = useState(false);
-  const barH = Math.max(Math.round((data.rev / maxRev) * 90), 4);
+  const maxBarH = 78;
+  const minBarH = 2;
+  const safeMax = maxRev > 0 ? maxRev : 1;
+  const scaled = Math.sqrt((data.rev || 0) / safeMax) * (maxBarH - minBarH);
+  const barH = Math.max(minBarH, scaled + minBarH);
   return (
     <div onClick={() => onBarClick(isSelected ? null : monthKey)}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, minWidth: 44, flex: 1, cursor: "pointer" }}>
-      <div style={{ fontSize: 9, color: isSelected ? T.accent : T.textMuted, fontWeight: isSelected ? 700 : 600, whiteSpace: "nowrap" }}>{fmt(data.rev)}</div>
-      <div style={{ width: "100%", height: barH, minHeight: 4, borderRadius: "4px 4px 0 0", background: isSelected ? T.accent : hovered ? T.accentBdr : "#CBD5E1", transition: "background 0.15s, transform 0.15s", transform: hovered ? "scaleY(1.04)" : "scaleY(1)", transformOrigin: "bottom", outline: isSelected ? `2px solid ${T.accent}` : "none", outlineOffset: 1 }} />
+      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 44, flex: 1, cursor: "pointer" }}>
+      <div style={{ fontSize: 10, color: isSelected ? T.accent : T.textSecondary, fontWeight: isSelected ? 800 : 700, whiteSpace: "nowrap" }}>
+        {fmt(data.rev)}
+      </div>
+      <div style={{ width: "100%", height: maxBarH, display: "flex", alignItems: "flex-end" }}>
+        <div style={{ width: "100%", height: barH, minHeight: 4, borderRadius: "4px 4px 0 0", background: isSelected ? T.accent : hovered ? T.accentBdr : "#CBD5E1", transition: "background 0.15s, transform 0.15s", transform: hovered ? "scaleY(1.04)" : "scaleY(1)", transformOrigin: "bottom", outline: isSelected ? `2px solid ${T.accent}` : "none", outlineOffset: 1 }} />
+      </div>
       <div style={{ fontSize: 10, color: isSelected ? T.accent : T.textSecondary, fontWeight: isSelected ? 700 : 400, whiteSpace: "nowrap" }}>{data.label}</div>
     </div>
   );
@@ -423,18 +955,18 @@ function MonthlyClosings({ leads, selectedMonth, onBarClick }) {
   const entries = Object.entries(monthMap).sort((a, b) => a[0].localeCompare(b[0])).slice(0, 12);
   const maxRev = Math.max(...entries.map(([, d]) => d.rev), 1);
   return (
-    <div className="card" style={{ padding: "20px 22px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <div style={{ fontSize: 11, color: T.textMuted, letterSpacing: "0.8px", textTransform: "uppercase", fontWeight: 600 }}>Projected Monthly Closings</div>
+    <div className="card" style={{ padding: "14px 16px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: T.textMuted, letterSpacing: "0.8px", textTransform: "uppercase", fontWeight: 700 }}>Projected Closing Revenue</div>
         {selectedMonth && (
           <button onClick={() => onBarClick(null)} style={{ fontSize: 11, color: T.accent, background: T.accentBg, border: `1px solid ${T.accentBdr}`, borderRadius: 6, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}>✕ Clear</button>
         )}
       </div>
-      {entries.length < 2 ? (
-        <div style={{ color: T.textMuted, fontSize: 12, textAlign: "center", padding: "24px 0" }}>Not enough date data to show trend.</div>
+      {entries.length === 0 ? (
+        <div style={{ color: T.textMuted, fontSize: 12, textAlign: "center", padding: "18px 0" }}>No closing revenue in this period.</div>
       ) : (
         <>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 120, overflowX: "auto" }}>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 116, overflowX: "auto" }}>
             {entries.map(([key, d]) => (
               <MonthBar key={key} monthKey={key} data={d} isSelected={selectedMonth === key} maxRev={maxRev} onBarClick={onBarClick} />
             ))}
@@ -450,48 +982,220 @@ function MonthlyClosings({ leads, selectedMonth, onBarClick }) {
   );
 }
 
-// ─── List row ─────────────────────────────────────────────────────────────────
-const LIST_GRID = "1.6fr 120px 110px 120px 100px 120px";
-const LIST_HEADERS = ["Lead / Company", "Project Type", "Region", "Sales Lead", "Closing Date", "Value"];
+function OverallProspectHealthCard({ leads, engagementsByLead }) {
+  const fmtBucketDate = (iso) => {
+    if (!iso) return "—";
+    const parts = String(iso).split("T")[0].split("-").map(Number);
+    if (parts.length !== 3) return "—";
+    const [, m, d] = parts;
+    if (!m || !d) return "—";
+    const dd = String(d).padStart(2, "0");
+    const mm = String(m).padStart(2, "0");
+    const yyyy = String(parts[0]);
+    return `${dd}/${mm}/${yyyy}`;
+  };
 
-function ListRow({ lead, isSelected, onClick }) {
-  const [hovered, setHovered] = useState(false);
-  const urg = URGENCY[getUrgency(lead.x_studio_expected_closing)];
-  const closingDate = fmtShort(lead.x_studio_expected_closing);
-  const regionColor = REGION_COLORS[lead.x_studio_responsible_region_1] || T.textMuted;
+  const getBucketRecordLabel = (lead) => {
+    const company = lead?.partner_id?.[1] || lead?.partner_name || "—";
+    const dt = fmtBucketDate(lead?.x_studio_expected_closing);
+    return `${lead?.name || "—"} ${dt !== "—" ? `(${dt})` : ""} — ${company}`;
+  };
+
+  const buildTooltipText = (bucketTier, bucketRecords, needsAction, attempted) => {
+    const maxItems = 5;
+    const lines = [];
+    lines.push(AGGREGATE_TOOLTIP_TEXT);
+    lines.push("");
+    lines.push("Records in this tier that need attention:");
+    lines.push(`No action taken (${needsAction.length}):`);
+    needsAction.slice(0, maxItems).forEach((lead) => lines.push(`  • ${getBucketRecordLabel(lead)}`));
+    if (needsAction.length > maxItems) lines.push(`  +${needsAction.length - maxItems} more`);
+    lines.push("");
+    lines.push(`Attempted, still pending (${attempted.length}):`);
+    attempted.slice(0, maxItems).forEach((lead) => lines.push(`  • ${getBucketRecordLabel(lead)}`));
+    if (attempted.length > maxItems) lines.push(`  +${attempted.length - maxItems} more`);
+    return lines.join("\n");
+  };
+
+  const scoredEntries = leads
+    .map((lead) => {
+      const position = HEALTH_POSITIONS[String(lead?.x_studio_prospect_health || "").trim()];
+      return typeof position === "number" && !Number.isNaN(position) ? { lead, position } : null;
+    })
+    .filter(Boolean);
+
+  const scoredPositions = scoredEntries.map((entry) => entry.position);
+
+  const averagePosition = scoredPositions.length
+    ? scoredPositions.reduce((sum, position) => sum + position, 0) / scoredPositions.length
+    : null;
+
+  const averageLabel = averagePosition == null ? null : getClosestHealthTier(averagePosition);
+  const bucketRecords = averageLabel
+    ? leads.filter((lead) => String(lead?.x_studio_prospect_health || "").trim() === averageLabel)
+    : [];
+  const needsAction = bucketRecords.filter((lead) => !hasCompletedActivity(engagementsByLead[lead.id] || []));
+  const attempted = bucketRecords.filter((lead) => hasCompletedActivity(engagementsByLead[lead.id] || []));
+  const tooltipText = averageLabel
+    ? buildTooltipText(averageLabel, bucketRecords, needsAction, attempted)
+    : AGGREGATE_TOOLTIP_TEXT;
+
   return (
-    <div onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      style={{ display: "grid", gridTemplateColumns: LIST_GRID, gap: 8, padding: "10px 14px", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: isSelected ? T.accentBg : hovered ? T.bgCardAlt : "transparent", cursor: "pointer", transition: "background 0.15s" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
-        {closingDate && (
-          <span style={{
-            display: "inline-block", width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
-            background: urg.border === "transparent" ? "transparent" : urg.border,
-          }} />
-        )}
-        <div style={{ overflow: "hidden" }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lead.name}</div>
-          <div style={{ fontSize: 11, color: T.textMuted }}>{lead.partner_id?.[1] || lead.partner_name || "—"}</div>
+    <div className="card" style={{ padding: "14px 14px", display: "flex", flexDirection: "column", minWidth: 0 }}>
+      <div style={{ fontSize: 10, color: T.textMuted, letterSpacing: "0.8px", textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>
+        Overall Prospect Health
+      </div>
+
+      {averagePosition == null ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, minHeight: 112, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <HealthSpeedometer value="" size={76} fallbackLabel="Not yet scored" />
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.textSecondary }}>No scored records</div>
+              <div style={{ fontSize: 10, color: T.textMuted, maxWidth: 130, lineHeight: 1.4 }}>
+                Update the filtered leads with prospect health to see the overall average.
+              </div>
+            </div>
+          </div>
         </div>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flex: 1, minHeight: 112, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+            <div title={tooltipText} style={{ cursor: "help" }}>
+              <HealthSpeedometer value={averageLabel} position={averagePosition} size={76} fallbackLabel={averageLabel} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+              <div
+                title={tooltipText}
+                style={{ fontSize: 15, fontWeight: 800, color: T.textPrimary, lineHeight: 1.15, cursor: "help", overflowWrap: "anywhere" }}
+              >
+                {averageLabel}
+              </div>
+              <div style={{ fontSize: 10, color: T.textMuted, lineHeight: 1.2 }}>Average across {scoredPositions.length} filtered record{scoredPositions.length === 1 ? "" : "s"}</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: T.accent, lineHeight: 1 }}>
+              {averagePosition.toFixed(1)}
+            </div>
+            <div style={{ fontSize: 9, color: T.textMuted, marginTop: 4, lineHeight: 1.1, whiteSpace: "nowrap" }}>
+              Score is out of 100
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── List row ─────────────────────────────────────────────────────────────────
+const LIST_GRID_COLUMNS = "2fr 120px 110px 100px 130px 110px minmax(190px, 1.25fr)";
+const LIST_HEADER_LABELS = ["Opportunity Name", "Closing & Status", "Expected Value", "Region", "Salesperson", "Project Type", "Activities"];
+
+function ListRow({ lead, activity, userMap, onActivityClick, healthHasCompleted, healthHasAnyActivity }) {
+  const [hovered, setHovered] = useState(false);
+  const regionColor = REGION_COLORS[lead.x_studio_responsible_region_1] || T.textMuted;
+  const salesperson = lead.user_id?.[1] || lead.x_studio_assigned_salesperson?.[1] || "—";
+  const company = lead.partner_id?.[1] || lead.partner_name || "—";
+  const closingLabel = formatClosingCellDate(lead.x_studio_expected_closing);
+  const projectType = lead.x_studio_project_background || "—";
+  const activityAssigned = activity ? getPersonNames(activity.x_studio_visit_by, userMap) : "—";
+  return (
+    <div
+      className="pipeline-list-row"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ background: hovered ? "#f0fdfd" : "#ffffff" }}
+    >
+      <div className="col-opportunity">
+        <div className="opp-title">
+          {lead.name}
+        </div>
+        <div className="opp-company">
+          {company}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, minWidth: 0 }}>
+          <HealthTag
+            health={lead.x_studio_prospect_health}
+            hasCompleted={healthHasCompleted}
+            hasAnyActivity={healthHasAnyActivity}
+            expectedClosingISO={lead.x_studio_expected_closing}
+          />
+        </div>
+        <a
+          className="opp-odoo-link"
+          href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+        >
+          View in Odoo ↗
+        </a>
       </div>
-      <div>
-        {lead.x_studio_project_background
-          ? <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: getProjectTypePill(lead.x_studio_project_background).bg, color: getProjectTypePill(lead.x_studio_project_background).color }}>{lead.x_studio_project_background}</span>
-          : <span style={{ fontSize: 11, color: T.textMuted }}>—</span>}
+
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+        <div style={{ fontSize: 12, color: "#374151" }}>{closingLabel}</div>
+        <UrgencyBadge closingDate={lead.x_studio_expected_closing} leadStatus={lead.x_studio_lead_status} />
       </div>
+
+      <div className="col-value">
+          {lead.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—"}
+      </div>
+
       <div>
         {lead.x_studio_responsible_region_1
-          ? <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: `${regionColor}18`, color: regionColor }}>{lead.x_studio_responsible_region_1}</span>
-          : <span style={{ fontSize: 11, color: T.textMuted }}>—</span>}
+          ? <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999, background: `${regionColor}18`, color: regionColor }}>
+              {lead.x_studio_responsible_region_1}
+            </span>
+          : <span style={{ fontSize: 11, color: "#9ca3af" }}>—</span>}
       </div>
-      <div style={{ fontSize: 12, color: lead.x_studio_sales_lead?.[1] ? T.textSecondary : T.textMuted }}>
-        {lead.x_studio_sales_lead?.[1] || "—"}
+
+      <div className="col-salesperson">
+        {salesperson}
       </div>
-      <div style={{ fontSize: 12, fontWeight: 500, color: closingDate ? urg.dateColor : T.textMuted }}>
-        {closingDate || "No date"}
+
+      <div>
+        {projectType !== "—"
+          ? <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: getProjectTypePill(projectType).bg, color: getProjectTypePill(projectType).color }}>{projectType}</span>
+          : <span style={{ color: "#d1d5db", fontSize: 13 }}>—</span>}
       </div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: lead.expected_revenue > 0 ? T.success : T.textMuted }}>
-        {lead.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—"}
+
+      <div style={{ display: "flex", justifyContent: "flex-start" }}>
+        {activity ? (
+          <button
+            type="button"
+            onClick={() => onActivityClick(activity)}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              gap: 2,
+              width: "100%",
+              padding: "6px 8px",
+              borderRadius: 8,
+              border: `1px solid ${T.border}`,
+              background: hovered ? T.accentBg : T.bgCard,
+              color: T.textPrimary,
+              cursor: "pointer",
+              fontFamily: "inherit",
+              textAlign: "left",
+            }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#7C3AED", lineHeight: 1.35 }}>
+              {activity.x_studio_engagement_type || "Activity"}
+            </span>
+            <span style={{ fontSize: 11, color: T.textSecondary, lineHeight: 1.4 }}>
+              {activityAssigned}
+            </span>
+            {activity.x_studio_engagement_with && (
+              <span style={{ fontSize: 10, color: T.textMuted, lineHeight: 1.25 }}>
+                With: {activity.x_studio_engagement_with}
+              </span>
+            )}
+          </button>
+        ) : (
+          <span className="activity-count-empty">—</span>
+        )}
       </div>
     </div>
   );
@@ -500,37 +1204,124 @@ function ListRow({ lead, isSelected, onClick }) {
 
 
 // ─── Main PipelineTab ─────────────────────────────────────────────────────────
-export function PipelineTab({ leads, stages }) {
+export function PipelineTab({ leads, engagements = [], userMap = {} }) {
+  const defaultPeriod = "This Year";
   const [viewMode, setViewMode] = useState("list");
-  const [activeOnly, setActiveOnly] = useState(true);
-  const [groupBy, setGroupBy] = useState("stage");
+  const [groupBy, setGroupBy] = useState("status");
   const [filterRegion, setFilterRegion] = useState([]);
-  const [filterStatus, setFilterStatus] = useState([]);
+  const [statusFilter, setStatusFilter] = useState("ACTIVE");
   const [filterPerson, setFilterPerson] = useState([]);
-  const [selectedLeadId, setSelectedLeadId] = useState(null);
-  const [collapsed, setCollapsed] = useState({});
+  const [filterCustomer, setFilterCustomer] = useState([]);
+  const [dateFrom, setDateFrom] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const range = getPeriodRange(defaultPeriod, today);
+    return range ? toDateInput(range.start) : "";
+  });
+  const [dateTo, setDateTo] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const range = getPeriodRange(defaultPeriod, today);
+    return range ? toDateInput(range.end) : "";
+  });
+  const [periodFilter, setPeriodFilter] = useState(defaultPeriod);
   const [selectedMonth, setSelectedMonth] = useState(null); // "YYYY-MM" drill-down from bar chart
-  const [donutFilter, setDonutFilter] = useState(null); // { kind: "lead_status" | "region" | "person", key: string }
+  const [donutFilter, setDonutFilter] = useState(null); // { kind: "lead_status" | "region" | "person" | "customer", key: string }
   const [filterProjectType, setFilterProjectType] = useState(null); // drill from GB donut
   const [searchQuery, setSearchQuery] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState({});
+  const [selectedActivity, setSelectedActivity] = useState(null);
 
   // Dropdown options
   const regionOptions = useMemo(() => [...new Set(leads.map(l => l.x_studio_responsible_region_1).filter(Boolean))].sort(), [leads]);
-  const statusOptions = useMemo(() => [...new Set(leads.map(l => l.x_studio_lead_status).filter(Boolean))].sort(), [leads]);
   const personOptions = useMemo(() => [...new Set(leads.map(l => (l.x_studio_assigned_salesperson?.[1] || l.user_id?.[1])).filter(Boolean))].sort(), [leads]);
+  const customerOptions = useMemo(
+    () => [...new Set(leads.map((l) => l.partner_id?.[1] || l.partner_name).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [leads]
+  );
+  const statusOptions = useMemo(() => {
+    const unique = [...new Set(leads.map(l => l.x_studio_lead_status).filter(Boolean))];
+    const ordered = ["ACTIVE", "CONVERTED TO RFQ", "REGRET", "LOST", "DEAD"];
+    const rest = unique.filter((s) => !ordered.includes(s)).sort();
+    return ["All Statuses", ...ordered.filter((s) => unique.includes(s)), ...rest].map((value) => ({
+      value,
+      label: `Status: ${value === "All Statuses" ? "All" : value}`,
+    }));
+  }, [leads]);
+  const periodOptions = useMemo(() => ([
+    { value: "All Time", label: "Period: All Time" },
+    { value: "This Month", label: "Period: This Month" },
+    { value: "This Quarter", label: "Period: This Quarter" },
+    { value: "This Year", label: "Period: This Year" },
+    { value: "Last 6 Months", label: "Period: Last 6 Months" },
+    { value: "Last 12 Months", label: "Period: Last 12 Months" },
+    { value: "Custom Range", label: "Period: Custom Range" },
+  ]), []);
 
   useEffect(() => { setDonutFilter(null); }, [groupBy]);
+  useEffect(() => {
+    if (periodFilter === "Custom Range") return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const range = getPeriodRange(periodFilter, today);
+    if (!range) {
+      setDateFrom("");
+      setDateTo("");
+      return;
+    }
+    setDateFrom(toDateInput(range.start));
+    setDateTo(toDateInput(range.end));
+  }, [periodFilter]);
+  const leadMap = useMemo(() => {
+    const map = {};
+    leads.forEach((lead) => { map[lead.id] = lead; });
+    return map;
+  }, [leads]);
+  const engagementsByLead = useMemo(() => {
+    const map = {};
+    (engagements || []).forEach((engagement) => {
+      const leadId = engagement?.x_crm_lead_id?.[0];
+      if (!leadId) return;
+      if (!map[leadId]) map[leadId] = [];
+      map[leadId].push(engagement);
+    });
+    return map;
+  }, [engagements]);
+  const primaryActivityByLead = useMemo(() => {
+    const map = {};
+    Object.entries(engagementsByLead).forEach(([leadId, leadEngagements]) => {
+      map[leadId] = getPrimaryEngagement(leadEngagements);
+    });
+    return map;
+  }, [engagementsByLead]);
 
   // Filtered leads
   const filteredLeads = useMemo(() => {
     return leads.filter(l => {
-      if (activeOnly && String(l.x_studio_lead_status || "") !== "ACTIVE") return false;
       if (filterRegion.length > 0 && !filterRegion.includes(l.x_studio_responsible_region_1)) return false;
-      if (filterStatus.length > 0 && !filterStatus.includes(l.x_studio_lead_status)) return false;
+      if (statusFilter !== "All Statuses" && l.x_studio_lead_status !== statusFilter) return false;
       if (filterPerson.length > 0 && !filterPerson.includes(l.x_studio_assigned_salesperson?.[1] || l.user_id?.[1])) return false;
+      if (filterCustomer.length > 0 && !filterCustomer.includes(l.partner_id?.[1] || l.partner_name)) return false;
+      if (dateFrom || dateTo) {
+        const d = parseISODate(l.x_studio_expected_closing);
+        if (!d) return false;
+        let from = dateFrom ? new Date(dateFrom) : null;
+        let to = dateTo ? new Date(dateTo) : null;
+        if (from) from.setHours(0, 0, 0, 0);
+        if (to) to.setHours(23, 59, 59, 999);
+        if (from && to && from > to) { const tmp = from; from = to; to = tmp; }
+        if (from && d < from) return false;
+        if (to && d > to) return false;
+      }
       if (donutFilter?.kind === "lead_status") {
-        const val = l.x_studio_lead_status ? String(l.x_studio_lead_status).trim() : null;
-        if (val !== donutFilter.key) return false;
+        const status = l.x_studio_lead_status ? String(l.x_studio_lead_status).trim() : null;
+        if (!status) return false;
+        if (String(donutFilter.key || "").startsWith("ACTIVE • ")) {
+          if (status !== "ACTIVE") return false;
+          if (getActiveBucketKey(l) !== donutFilter.key) return false;
+        } else {
+          if (status !== donutFilter.key) return false;
+        }
       }
       if (donutFilter?.kind === "region") {
         const val = l.x_studio_responsible_region_1 ? String(l.x_studio_responsible_region_1).trim() : "No Region";
@@ -538,6 +1329,10 @@ export function PipelineTab({ leads, stages }) {
       }
       if (donutFilter?.kind === "person") {
         const val = l.x_studio_assigned_salesperson?.[1] || l.user_id?.[1] || "Unassigned";
+        if (val !== donutFilter.key) return false;
+      }
+      if (donutFilter?.kind === "customer") {
+        const val = l.partner_id?.[1] || l.partner_name || "No Customer";
         if (val !== donutFilter.key) return false;
       }
       if (filterProjectType) {
@@ -561,7 +1356,7 @@ export function PipelineTab({ leads, stages }) {
       }
       return true;
     });
-  }, [leads, activeOnly, filterRegion, filterStatus, filterPerson, donutFilter, filterProjectType, selectedMonth, searchQuery]);
+  }, [leads, filterRegion, statusFilter, filterPerson, filterCustomer, donutFilter, filterProjectType, selectedMonth, searchQuery, dateFrom, dateTo]);
 
   // Group + sort
   const groups = useMemo(() => {
@@ -570,7 +1365,8 @@ export function PipelineTab({ leads, stages }) {
       let key;
       if (groupBy === "region") key = l.x_studio_responsible_region_1 || "No Region";
       else if (groupBy === "person") key = l.x_studio_assigned_salesperson?.[1] || "Unassigned";
-      else if (groupBy === "stage") key = l.stage_id?.[1] || "No Stage";
+      else if (groupBy === "customer") key = l.partner_id?.[1] || l.partner_name || "No Customer";
+      else if (groupBy === "status") key = l.x_studio_lead_status || "No Status";
       else key = l.x_studio_lead_status || "No Status";
       if (!map[key]) map[key] = [];
       map[key].push(l);
@@ -590,110 +1386,274 @@ export function PipelineTab({ leads, stages }) {
     let keys = Object.keys(map);
     const STATUS_ORDER = ["ACTIVE", "CONVERTED TO RFQ", "REGRET", "No Status"];
     if (groupBy === "region") keys.sort((a, b) => { const ra = REGION_COLORS[a] ? 0 : 1; const rb = REGION_COLORS[b] ? 0 : 1; return ra - rb || a.localeCompare(b); });
-    else if (groupBy === "stage") keys.sort((a, b) => { const ia = stages.findIndex(s => s.name === a); const ib = stages.findIndex(s => s.name === b); return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib); });
+    else if (groupBy === "status") keys.sort((a, b) => {
+      const ia = STATUS_ORDER.indexOf(a);
+      const ib = STATUS_ORDER.indexOf(b);
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib) || a.localeCompare(b);
+    });
     else keys.sort();
     return keys.map((key, i) => ({ key, leads: map[key], idx: i }));
-  }, [filteredLeads, groupBy, stages]);
+  }, [filteredLeads, groupBy]);
 
   const groupColor = (key, idx) => {
-    if (groupBy === "region") return REGION_COLORS[key] || T.textMuted;
+    if (groupBy === "region") return REGION_COLORS[key] || T.accent;
     if (groupBy === "person") return PERSON_COLORS[idx % PERSON_COLORS.length];
-    if (groupBy === "stage") return PERSON_COLORS[idx % PERSON_COLORS.length];
+    if (groupBy === "customer") return PERSON_COLORS[idx % PERSON_COLORS.length];
+    if (groupBy === "status") return getPill(key).text;
     return getPill(key).text;
   };
 
-  const toggleCollapse = (key) => setCollapsed(c => ({ ...c, [key]: !c[key] }));
-  const handleSetViewMode = (mode) => { setViewMode(mode); setSelectedLeadId(null); };
-  const anyFilter = filterRegion.length > 0 || filterStatus.length > 0 || filterPerson.length > 0 || searchQuery !== "";
+  const handleSetViewMode = (mode) => { setViewMode(mode); };
+  const anyFilter = filterRegion.length > 0
+    || filterPerson.length > 0
+    || filterCustomer.length > 0
+    || searchQuery !== ""
+    || periodFilter !== defaultPeriod
+    || statusFilter !== "ACTIVE";
 
-  const segBtn = (active) => ({
-    padding: "5px 14px", border: "none", cursor: "pointer", fontFamily: "inherit",
-    fontSize: 12, fontWeight: 600, transition: "all 0.15s",
-    background: active ? T.accent : T.bgCard,
-    color: active ? "#fff" : T.textSecondary,
-  });
+  const breakdownEnabled = statusFilter === "ACTIVE";
 
   return (
     <div>
-      <style>{`@keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }`}</style>
+      <style>{`
+        @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+        .pipeline-list-header {
+          display: grid;
+          grid-template-columns: ${LIST_GRID_COLUMNS};
+          padding: 8px 16px;
+          background: #f8fafc;
+          border-bottom: 2px solid #e2e8f0;
+          position: sticky;
+          top: 0;
+          z-index: 10;
+        }
+        .pipeline-list-header span {
+          font-size: 10px;
+          font-weight: 700;
+          color: #9ca3af;
+          letter-spacing: 0.8px;
+          text-transform: uppercase;
+        }
+        .pipeline-list-row {
+          display: grid;
+          grid-template-columns: ${LIST_GRID_COLUMNS};
+          padding: 10px 16px;
+          border-bottom: 1px solid #f1f5f9;
+          background: white;
+          align-items: start;
+          transition: background 0.15s;
+          min-height: 52px;
+        }
+        .col-opportunity {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          padding-right: 12px;
+          min-width: 0;
+        }
+        .opp-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: #1e293b;
+          line-height: 1.4;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .opp-company {
+          font-size: 11px;
+          color: #94a3b8;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .opp-odoo-link {
+          font-size: 11px;
+          color: #02818A;
+          text-decoration: none;
+          opacity: 0;
+          transition: opacity 0.15s;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          margin-top: 4px;
+        }
+        .pipeline-list-row:hover .opp-odoo-link {
+          opacity: 1;
+        }
+        .col-value {
+          font-size: 13px;
+          font-weight: 700;
+          color: #02818A;
+          text-align: right;
+          padding-right: 8px;
+        }
+        .col-salesperson {
+          font-size: 12px;
+          color: #374151;
+          font-weight: 500;
+          line-height: 1.4;
+          white-space: normal;
+          word-break: break-word;
+        }
+        .activity-count-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          background: #e0f2fe;
+          color: #0284c7;
+          font-size: 11px;
+          font-weight: 700;
+        }
+        .activity-count-empty {
+          color: #d1d5db;
+          font-size: 13px;
+        }
+        .gf-bf-legend {
+          display: flex;
+          justify-content: center;
+          gap: 28px;
+          margin-top: 12px;
+          flex-wrap: wrap;
+        }
+        .gf-bf-legend-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 2px;
+        }
+        .gf-bf-legend-label {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          font-size: 11px;
+          font-weight: 600;
+          color: #374151;
+        }
+        .gf-bf-legend-value {
+          font-size: 14px;
+          font-weight: 700;
+          color: #1e293b;
+        }
+        .gf-bf-legend-count {
+          font-size: 10px;
+          color: #9ca3af;
+        }
+      `}</style>
 
       {/* ── Filter bar ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10, justifyContent: "space-between" }}>
-
-        {/* Left: Filters */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flex: 1 }}>
-          {/* Active Only toggle */}
-          <button onClick={() => setActiveOnly(a => !a)} style={{
-            padding: "5px 14px", borderRadius: 100, fontSize: 12, fontWeight: 600, fontFamily: "inherit",
-            border: `1px solid ${activeOnly ? T.accent : T.border}`,
-            background: activeOnly ? T.accentBg : T.bgCard,
-            color: activeOnly ? T.accent : T.textSecondary, cursor: "pointer",
-          }}>Active Only</button>
-
-          {/* Group by segmented */}
-          <div style={{ display: "flex", borderRadius: 8, border: `1px solid ${T.border}`, overflow: "hidden" }}>
-            {[["stage", "By Stage"], ["region", "By Region"], ["person", "By Person"]].map(([val, lbl], i) => (
-              <button key={val} onClick={() => setGroupBy(val)} style={{
-                ...segBtn(groupBy === val),
-                borderRight: i < 2 ? `1px solid ${T.border}` : "none",
-                borderRadius: i === 0 ? "7px 0 0 7px" : i === 2 ? "0 7px 7px 0" : 0,
-              }}>{lbl}</button>
-            ))}
-          </div>
-
-          {/* Dropdown filters */}
-          <MultiSelect label="Region" options={regionOptions} selected={filterRegion} onChange={setFilterRegion} />
-          <MultiSelect label="Status" options={statusOptions} selected={filterStatus} onChange={setFilterStatus} />
-          <MultiSelect label="Person" options={personOptions} selected={filterPerson} onChange={setFilterPerson} />
-          {anyFilter && (
-            <button onClick={() => { setFilterRegion([]); setFilterStatus([]); setFilterPerson([]); setSearchQuery(""); }}
-              style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.border}`, background: "none", color: T.textMuted, fontSize: 12, fontFamily: "inherit", cursor: "pointer" }}>✕</button>
-          )}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", marginBottom: 10, padding: "10px 16px", borderRadius: 12, background: "#ffffff", border: `1px solid ${T.border}` }}>
+        <FilterSelect value={statusFilter} onChange={setStatusFilter} options={statusOptions} width={148} />
+        <FilterSelect value={periodFilter} onChange={setPeriodFilter} options={periodOptions} width={174} />
+        <MultiSelect label="Region" options={regionOptions} selected={filterRegion} onChange={setFilterRegion} />
+        <MultiSelect label="Person" options={personOptions} selected={filterPerson} onChange={setFilterPerson} />
+        <MultiSelect
+          label="Customer"
+          options={customerOptions}
+          selected={filterCustomer}
+          onChange={setFilterCustomer}
+          searchable
+          searchPlaceholder="Search customer..."
+        />
+        <div style={{ width: 1, height: 20, background: "#e5e7eb", flexShrink: 0 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+          {[["status", "By Lead Status"], ["region", "By Region"], ["person", "By Person"], ["customer", "By Customer"]].map(([val, lbl]) => (
+            <button
+              key={val}
+              onClick={() => setGroupBy(val)}
+              style={{
+                background: "none",
+                border: "none",
+                borderBottom: groupBy === val ? `2px solid ${T.accent}` : "2px solid transparent",
+                color: groupBy === val ? T.accent : "#9ca3af",
+                fontSize: 12,
+                fontWeight: 500,
+                padding: "0 0 4px",
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              {lbl}
+            </button>
+          ))}
         </div>
-
-        {/* Right: Search & List / Kanban toggle */}
-        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, flex: 1 }}>
-          <input
-            type="text"
-            placeholder="Search leads..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{
-              padding: "5px 12px",
-              borderRadius: 8,
-              border: `1px solid ${T.border}`,
-              background: T.bgInput,
-              color: T.textPrimary,
-              fontFamily: "inherit",
-              fontSize: 13,
-              width: "100%",
-              maxWidth: 220,
-              outline: "none"
+        <div style={{ flex: 1 }} />
+        <input
+          type="text"
+          placeholder="Search leads..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{
+            padding: "6px 10px",
+            borderRadius: 8,
+            border: `1px solid ${T.border}`,
+            background: T.bgInput,
+            color: T.textPrimary,
+            fontFamily: "inherit",
+            fontSize: 12,
+            width: 180,
+            outline: "none"
+          }}
+        />
+        <div style={{ display: "flex", borderRadius: 8, border: `1px solid ${T.border}`, overflow: "hidden", flexShrink: 0 }}>
+          <button onClick={() => handleSetViewMode("list")} style={{ background: viewMode === "list" ? T.accent : T.bgCard, color: viewMode === "list" ? "#fff" : T.textSecondary, border: "none", borderRight: `1px solid ${T.border}`, padding: "6px 12px", cursor: "pointer", fontFamily: "inherit", fontSize: 15 }} title="List view">≡</button>
+          <button onClick={() => handleSetViewMode("kanban")} style={{ background: viewMode === "kanban" ? T.accent : T.bgCard, color: viewMode === "kanban" ? "#fff" : T.textSecondary, border: "none", padding: "6px 12px", cursor: "pointer", fontFamily: "inherit", fontSize: 13 }} title="Kanban view">⊞</button>
+        </div>
+        {anyFilter && (
+          <button
+            onClick={() => {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const range = getPeriodRange(defaultPeriod, today);
+              setFilterRegion([]);
+              setFilterPerson([]);
+              setFilterCustomer([]);
+              setStatusFilter("ACTIVE");
+              setPeriodFilter(defaultPeriod);
+              setDateFrom(range ? toDateInput(range.start) : "");
+              setDateTo(range ? toDateInput(range.end) : "");
+              setSearchQuery("");
+              setDonutFilter(null);
+              setFilterProjectType(null);
+              setSelectedMonth(null);
             }}
-          />
-          <div style={{ display: "flex", borderRadius: 8, border: `1px solid ${T.border}`, overflow: "hidden" }}>
-            <button onClick={() => handleSetViewMode("list")} style={{ ...segBtn(viewMode === "list"), padding: "6px 12px", borderRadius: "7px 0 0 7px", borderRight: `1px solid ${T.border}`, fontSize: 15 }} title="List view">≡</button>
-            <button onClick={() => handleSetViewMode("kanban")} style={{ ...segBtn(viewMode === "kanban"), padding: "6px 12px", borderRadius: "0 7px 7px 0", fontSize: 13 }} title="Kanban view">⊞</button>
-          </div>
-        </div>
+            style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.border}`, background: "none", color: T.textMuted, fontSize: 12, fontFamily: "inherit", cursor: "pointer", flexShrink: 0 }}
+          >
+            ✕
+          </button>
+        )}
       </div>
 
-      {/* ── Urgency legend ── */}
-      <div style={{ display: "flex", gap: 16, marginBottom: 12, fontSize: 11, flexWrap: "wrap" }}>
-        {[["#EF4444", "Overdue"], ["#ffb744ff", "Due in ≤2 days"], ["#f5f10bff", "Due this week"]].map(([c, l]) => (
-          <span key={l} style={{ display: "flex", alignItems: "center", gap: 5, color: T.textSecondary }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: c, display: "inline-block" }} />
-            {l}
-          </span>
-        ))}
-      </div>
+      {periodFilter === "Custom Range" && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "0 16px" }}>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.bgInput, color: T.textPrimary, fontFamily: "inherit", fontSize: 12, outline: "none" }}
+          />
+          <span style={{ fontSize: 12, color: T.textMuted }}>—</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.bgInput, color: T.textPrimary, fontFamily: "inherit", fontSize: 12, outline: "none" }}
+          />
+        </div>
+      )}
 
       {/* ── Charts row ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: donutFilter || filterProjectType ? 6 : 14 }}>
-        {groupBy === "stage" ? (
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 0.92fr) minmax(0, 1.6fr)", gap: 10, marginBottom: donutFilter || filterProjectType ? 6 : 10 }}>
+        {groupBy === "status" ? (
           <RevenueDonut
             leads={filteredLeads}
             activeKey={donutFilter?.kind === "lead_status" ? donutFilter.key : null}
+            breakdownEnabled={breakdownEnabled}
             onSegmentClick={(key) => {
               setDonutFilter(prev => (prev?.kind === "lead_status" && prev.key === key) ? null : ({ kind: "lead_status", key }));
               handleSetViewMode("list");
@@ -708,12 +1668,21 @@ export function PipelineTab({ leads, stages }) {
               handleSetViewMode("list");
             }}
           />
-        ) : (
+        ) : groupBy === "person" ? (
           <PersonDonut
             leads={filteredLeads}
             activeKey={donutFilter?.kind === "person" ? donutFilter.key : null}
             onSegmentClick={(key) => {
               setDonutFilter(prev => (prev?.kind === "person" && prev.key === key) ? null : ({ kind: "person", key }));
+              handleSetViewMode("list");
+            }}
+          />
+        ) : (
+          <CustomerDonut
+            leads={filteredLeads}
+            activeKey={donutFilter?.kind === "customer" ? donutFilter.key : null}
+            onSegmentClick={(key) => {
+              setDonutFilter(prev => (prev?.kind === "customer" && prev.key === key) ? null : ({ kind: "customer", key }));
               handleSetViewMode("list");
             }}
           />
@@ -726,6 +1695,7 @@ export function PipelineTab({ leads, stages }) {
             handleSetViewMode("list");
           }}
         />
+        <OverallProspectHealthCard leads={filteredLeads} engagementsByLead={engagementsByLead} />
         <MonthlyClosings
           leads={filteredLeads}
           selectedMonth={selectedMonth}
@@ -735,13 +1705,14 @@ export function PipelineTab({ leads, stages }) {
 
       {/* ── Active drill-down indicators ── */}
       {(donutFilter || filterProjectType || selectedMonth) && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontSize: 11, color: T.textMuted }}>Filtered by:</span>
           {donutFilter?.kind === "lead_status" && (() => {
-            const p = getPill(donutFilter.key);
+            const pillKey = String(donutFilter.key || "").startsWith("ACTIVE • ") ? "ACTIVE" : donutFilter.key;
+            const p = getPill(pillKey);
             return (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100, background: p.bg, color: p.text, border: `1px solid ${p.text}40` }}>
-                Status: {donutFilter.key}
+                Status: {stripActivePrefix(donutFilter.key)}
                 <button onClick={() => setDonutFilter(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "inherit", lineHeight: 1, padding: 0, marginLeft: 2 }}>×</button>
               </span>
             );
@@ -755,6 +1726,12 @@ export function PipelineTab({ leads, stages }) {
           {donutFilter?.kind === "person" && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100, background: `${T.accent}18`, color: T.accent, border: `1px solid ${T.accent}40` }}>
               Person: {donutFilter.key}
+              <button onClick={() => setDonutFilter(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "inherit", lineHeight: 1, padding: 0, marginLeft: 2 }}>×</button>
+            </span>
+          )}
+          {donutFilter?.kind === "customer" && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100, background: `${T.accent}18`, color: T.accent, border: `1px solid ${T.accent}40` }}>
+              Customer: {donutFilter.key}
               <button onClick={() => setDonutFilter(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "inherit", lineHeight: 1, padding: 0, marginLeft: 2 }}>×</button>
             </span>
           )}
@@ -779,61 +1756,56 @@ export function PipelineTab({ leads, stages }) {
 
       {/* ── Grouped content ── */}
       {groups.map(({ key, leads: groupLeads, idx }) => {
-        const gColor = groupColor(key, idx);
         const groupRev = groupLeads.reduce((s, l) => s + (l.expected_revenue || 0), 0);
-        const isCollapsed = !!collapsed[key];
+        const isExpanded = !!expandedGroups[key];
         return (
           <div key={key} style={{ marginBottom: 14 }}>
-            {/* Group header — white bg, teal left accent line (Make.com style) */}
-            <div onClick={() => viewMode === "list" && toggleCollapse(key)}
+            <div
+              onClick={() => setExpandedGroups((prev) => ({ ...prev, [key]: !prev[key] }))}
               style={{
                 display: "flex", alignItems: "center", gap: 10,
-                padding: "8px 14px", paddingLeft: 12,
-                background: "#FFFFFF",
+                padding: "10px 16px",
+                background: "#f8fafc",
                 border: `1px solid ${T.border}`,
-                borderLeft: "3px solid #02818A",
-                borderRadius: isCollapsed || viewMode === "kanban" ? 6 : "6px 6px 0 0",
+                borderLeft: "4px solid #02818A",
+                borderRadius: isExpanded ? "10px 10px 0 0" : 10,
                 marginBottom: 0,
-                cursor: viewMode === "list" ? "pointer" : "default",
-                userSelect: "none",
+                cursor: "pointer",
               }}>
-              <div style={{ width: 10, height: 10, borderRadius: "50%", background: gColor, flexShrink: 0 }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: gColor, flex: 1 }}>{key}</span>
-              <span style={{ fontSize: 11, fontWeight: 600, padding: "1px 8px", borderRadius: 100, background: `${gColor}18`, color: gColor }}>{groupLeads.length}</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: T.success }}>{fmt(groupRev)}</span>
-              {viewMode === "list" && (
-                <span style={{ fontSize: 13, color: T.textMuted, padding: "0 4px", pointerEvents: "none" }}>
-                  {isCollapsed ? "▼" : "▲"}
-                </span>
-              )}
+              <span style={{ fontSize: 11, color: "#02818A", width: 14, textAlign: "center", flexShrink: 0 }}>
+                {isExpanded ? "▾" : "▸"}
+              </span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#02818A", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{key}</span>
+              <span style={{ fontSize: 13, color: "#6b7280" }}>{groupLeads.length} leads</span>
+              <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 600 }}>{fmt(groupRev)}</span>
             </div>
 
-            {!isCollapsed && viewMode === "list" && (
-              <div style={{ border: `1px solid ${T.border}`, borderTop: "none", borderRadius: "0 0 6px 6px", overflow: "hidden" }}>
-                {/* Sticky column headers */}
-                <div style={{ display: "grid", gridTemplateColumns: LIST_GRID, gap: 8, padding: "7px 14px", background: T.bgCardAlt, borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, zIndex: 2 }}>
-                  {LIST_HEADERS.map(h => (
-                    <div key={h} style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>{h}</div>
+            {viewMode === "list" && isExpanded && (
+              <div style={{ border: `1px solid ${T.border}`, borderTop: "none", borderRadius: "0 0 10px 10px", overflow: "hidden" }}>
+                <div className="pipeline-list-header">
+                  {LIST_HEADER_LABELS.map((label) => (
+                    <span key={label}>{label}</span>
                   ))}
                 </div>
                 {groupLeads.map(lead => (
-                  <div key={lead.id}>
-                    <ListRow lead={lead} isSelected={selectedLeadId === lead.id} onClick={() => setSelectedLeadId(selectedLeadId === lead.id ? null : lead.id)} />
-                    {selectedLeadId === lead.id && (
-                      <div style={{ padding: "0 14px 10px" }}>
-                        <LeadCard lead={lead} onClose={() => setSelectedLeadId(null)} />
-                      </div>
-                    )}
-                  </div>
+                  <ListRow
+                    key={lead.id}
+                    lead={lead}
+                    activity={primaryActivityByLead[lead.id]}
+                    userMap={userMap}
+                    onActivityClick={setSelectedActivity}
+                    healthHasCompleted={hasCompletedActivity(engagementsByLead[lead.id] || [])}
+                    healthHasAnyActivity={hasAnyActivity(engagementsByLead[lead.id] || [])}
+                  />
                 ))}
               </div>
             )}
 
-            {viewMode === "kanban" && (
+            {viewMode === "kanban" && isExpanded && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14, marginTop: 10 }}>
                 {groupLeads.map(lead => (
                   <div key={lead.id} style={{ display: "flex", flexDirection: "column" }}>
-                    <LeadCard lead={lead} />
+                    <LeadCard lead={lead} uniform />
                   </div>
                 ))}
               </div>
@@ -844,6 +1816,15 @@ export function PipelineTab({ leads, stages }) {
 
       {groups.length === 0 && (
         <div style={{ textAlign: "center", padding: "48px 0", color: T.textMuted, fontSize: 13 }}>No leads match the current filters.</div>
+      )}
+
+      {selectedActivity && (
+        <ActivityDetailModal
+          engagement={selectedActivity}
+          lead={leadMap[selectedActivity.x_crm_lead_id?.[0]]}
+          userMap={userMap}
+          onClose={() => setSelectedActivity(null)}
+        />
       )}
     </div>
   );

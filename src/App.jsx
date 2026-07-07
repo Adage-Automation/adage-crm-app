@@ -7,6 +7,7 @@ import { VisitsTab }         from "./views/VisitsTab";
 import { TeamTab }           from "./views/TeamTab";
 import { CalendarDayPopup }  from "./views/CalendarDayPopup";
 import SwimlaneView          from "./views/SwimlaneView";
+import mainLogo from "./logos/Main Logo.png";
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -55,12 +56,12 @@ export default function App() {
             "x_studio_assigned_salesperson","date_deadline","user_id","x_studio_product_info",
             "x_studio_crm_lead_approval","x_studio_sbu","x_studio_project_details",
             "x_studio_sales_lead","activity_date_deadline","priority","x_studio_project_background",
-            "x_studio_lead_status","x_studio_expected_closing"],
+            "x_studio_lead_status","x_studio_expected_closing","x_studio_prospect_health"],
           limit: 200,
         }),
         fetchOdoo("x_crm_lead_line_6bc5b", "search_read", [[]], {
           fields: ["x_name","x_crm_lead_id","x_studio_engagement_type","x_studio_proposed_date","x_studio_engagement_status","x_studio_visit_by",
-            "x_studio_remarkscommments","x_studio_rescheduled_date"],
+            "x_studio_remarkscommments","x_studio_rescheduled_date","x_studio_engagement_with"],
           limit: 500,
         }),
         fetchOdoo("crm.stage", "search_read", [[]], { fields: ["name","sequence"], order: "sequence asc" }),
@@ -197,13 +198,31 @@ export default function App() {
       {/* Header */}
       <div style={{ borderBottom: `1px solid ${T.border}`, padding: "0 28px", background: T.bgHeader, display: "flex", alignItems: "center", justifyContent: "space-between", height: 60, position: "sticky", top: 0, zIndex: 100, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 34, height: 34, background: "linear-gradient(135deg, #02818A, #026E76)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(2,129,138,0.3)" }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-          </div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: "-0.3px", color: T.textPrimary }}>ADAGE</div>
-            <div style={{ fontSize: 10, color: T.textMuted, letterSpacing: "1.5px", textTransform: "uppercase", marginTop: -1 }}>CRM Intelligence</div>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("pipeline");
+              setPopupDetail(null);
+              setPopupDay(null);
+              setSelectedLead(null);
+            }}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              lineHeight: 1,
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            <img src={mainLogo} alt="ADAGE" style={{ height: 22, width: "auto", display: "block" }} />
+            <div style={{ fontSize: 10, color: T.textMuted, letterSpacing: "1.6px", textTransform: "uppercase", marginTop: 4, fontWeight: 700 }}>
+              CRM INTELLIGENCE
+            </div>
+          </button>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           {tabs.map(t => (
@@ -236,7 +255,7 @@ export default function App() {
           <ErrorBoundary key={activeTab}>
             <div className="fade-in">
             {activeTab === "pipeline" && (
-              <PipelineTab leads={leads} stages={data.stages} />
+              <PipelineTab leads={leads} stages={data.stages} engagements={engagements} userMap={userMap} />
             )}
             {activeTab === "visits" && (
               <VisitsTab

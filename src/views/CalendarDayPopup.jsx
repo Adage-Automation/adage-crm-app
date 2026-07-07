@@ -18,8 +18,8 @@ const getDisplayDateMeta = (engagement) => {
   if (engagement?.x_studio_proposed_date) {
     return {
       date: engagement.x_studio_proposed_date,
-      label: "Proposed",
-      detailLabel: "Proposed Date",
+      label: "Planned Date",
+      detailLabel: "Planned Date",
       color: T.textSecondary,
       bg: T.bgInput,
     };
@@ -37,8 +37,8 @@ const getDisplayDateMeta = (engagement) => {
 
   return {
     date: null,
-    label: "Proposed",
-    detailLabel: "Proposed Date",
+    label: "Planned Date",
+    detailLabel: "Planned Date",
     color: T.textMuted,
     bg: T.bgInput,
   };
@@ -88,15 +88,16 @@ export function CalendarDayPopup({ popupDay, setPopupDay, popupDetail, setPopupD
 function DetailView({ e, leads, userMap, statusColors, statusBgs, onBack }) {
   const lead = leads.find(l => l.id === e.x_crm_lead_id?.[0]);
   const { date: detailDate, detailLabel } = getDisplayDateMeta(e);
-  const pbColor = e.x_studio_project_background === "Greenfield" ? T.accent
-    : e.x_studio_project_background === "Brownfield" ? "#F59E0B" : T.textMuted;
-  const pbBg = e.x_studio_project_background === "Greenfield" ? T.accentBg
-    : e.x_studio_project_background === "Brownfield" ? T.warningBg : T.bgInput;
+  const status = e.x_studio_engagement_status || "Unknown";
+  const company = lead?.partner_id?.[1] || e.x_crm_lead_id?.[1] || "—";
+  const assignedTo = getPersonNames(e.x_studio_visit_by, userMap);
+  const orderValue = lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—";
+  const remarks = e.x_studio_remarkscomments || e.x_studio_remarkscommments || "—";
 
   const Field = ({ label, value, color }) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 600, letterSpacing: "0.7px", textTransform: "uppercase" }}>{label}</div>
-      <div style={{ fontSize: 13, color: color || T.textPrimary, fontWeight: 500 }}>{value || "—"}</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>{label}</div>
+      <div style={{ fontSize: 14, color: color || T.textPrimary, fontWeight: 500, lineHeight: 1.45, wordBreak: "break-word" }}>{value || "—"}</div>
     </div>
   );
 
@@ -104,53 +105,78 @@ function DetailView({ e, leads, userMap, statusColors, statusBgs, onBack }) {
     <>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
         <button onClick={onBack} style={{ background: T.bgInput, border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 13, color: T.textSecondary, fontFamily: "inherit", transition: "all 0.2s" }}>← Back</button>
-        <div style={{ fontWeight: 800, fontSize: 16, color: T.textPrimary }}>Visit Detail</div>
+        <div style={{ fontWeight: 800, fontSize: 16, color: T.textPrimary }}>Activity Detail</div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
-        <Field label="Customer" value={lead?.partner_id?.[1] || e.x_crm_lead_id?.[1]} />
-        <Field label="Engagement Type" value={e.x_studio_engagement_type} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 600, letterSpacing: "0.7px", textTransform: "uppercase" }}>Status</div>
-          {e.x_studio_engagement_status
-            ? <span className="pill" style={{ background: statusBgs[e.x_studio_engagement_status] || T.bgInput, color: statusColors[e.x_studio_engagement_status] || T.textMuted, alignSelf: "flex-start" }}>{e.x_studio_engagement_status}</span>
-            : <span style={{ fontSize: 13, color: T.textMuted }}>—</span>}
+      <div
+        style={{
+          border: `1px solid ${T.border}`,
+          borderRadius: 12,
+          background: T.bgCard,
+          padding: "18px 20px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 18,
+          animation: "fadeIn 0.25s ease",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: T.textPrimary }}>Activity Detail</div>
+          <span className="pill" style={{ background: statusBgs[status] || T.bgInput, color: statusColors[status] || T.textMuted, fontSize: 10, fontWeight: 700 }}>
+            {status}
+          </span>
         </div>
-      </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
-        <Field label="Assigned Person(s)" value={getPersonNames(e.x_studio_visit_by, userMap)} />
-        <Field label="Region" value={lead?.x_studio_responsible_region_1} color={REGION_COLORS[lead?.x_studio_responsible_region_1] || T.textPrimary} />
-        <Field label="Order Value" value={lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : null} color={T.success} />
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
-        <Field label={detailLabel} value={fmtDate(detailDate)} />
-        <Field label="Actual Visit Date" value={fmtDate(e.x_studio_visit_date)} />
-        <Field label="Next Follow-up" value={fmtDate(e.x_studio_next_follow_up_date)} />
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
-        <Field label="Opportunity" value={lead?.name || e.x_crm_lead_id?.[1]} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 600, letterSpacing: "0.7px", textTransform: "uppercase" }}>Project Background</div>
-          {e.x_studio_project_background
-            ? <span className="pill" style={{ background: pbBg, color: pbColor, alignSelf: "flex-start" }}>{e.x_studio_project_background}</span>
-            : <span style={{ fontSize: 13, color: T.textMuted }}>—</span>}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "18px 28px" }}>
+          <Field label="Customer" value={company} />
+          <Field label="Deal Value" value={orderValue} color={orderValue !== "—" ? T.success : T.textMuted} />
+          <Field label="Engagement Type" value={e.x_studio_engagement_type || "—"} />
+          <Field label="Engagement With" value={e.x_studio_engagement_with || "—"} />
+          <Field label="Assigned To" value={assignedTo} />
+          <Field label={detailLabel} value={fmtDate(detailDate)} />
+          <Field label="Region" value={lead?.x_studio_responsible_region_1 || "—"} color={REGION_COLORS[lead?.x_studio_responsible_region_1] || T.textPrimary} />
+          <Field label="Opportunity" value={lead?.name || e.x_crm_lead_id?.[1] || "—"} />
+          <Field label="Industry" value={lead?.x_studio_industry_type || "—"} />
+          <Field label="SBU" value={lead?.x_studio_sbu || "—"} />
+          <Field label="Actual Visit Date" value={fmtDate(e.x_studio_visit_date)} />
+          <Field label="Next Follow-up" value={fmtDate(e.x_studio_next_follow_up_date)} />
         </div>
-        <Field label="Industry" value={lead?.x_studio_industry_type} />
-      </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: e.x_studio_remarkscommments ? 16 : 0 }}>
-        <Field label="SBU" value={lead?.x_studio_sbu} />
-      </div>
-
-      {e.x_studio_remarkscommments && (
-        <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 14 }}>
-          <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 600, letterSpacing: "0.7px", textTransform: "uppercase", marginBottom: 6 }}>Remarks / Comments</div>
-          <div style={{ fontSize: 13, color: T.textSecondary, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{e.x_studio_remarkscommments}</div>
+        <div>
+          <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", marginBottom: 6 }}>
+            Remarks / Comments
+          </div>
+          <div style={{ fontSize: 14, color: remarks === "—" ? T.textMuted : T.textPrimary, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+            {remarks}
+          </div>
         </div>
-      )}
+
+        {lead?.id && (
+          <div>
+            <a
+              href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                padding: "8px 12px",
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 600,
+                background: T.accentBg,
+                color: T.accent,
+                border: `1px solid ${T.accentBdr}`,
+                textDecoration: "none",
+              }}
+            >
+              View in Odoo →
+            </a>
+          </div>
+        )}
+      </div>
     </>
   );
 }
@@ -197,11 +223,19 @@ function DayListView({ popupDay, leads, userMap, statusColors, statusBgs, onClos
               </div>
             </div>
 
+            {e.x_studio_engagement_with && (
+              <div style={{ marginTop: 6, fontSize: 11, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                With: {e.x_studio_engagement_with}
+              </div>
+            )}
+
             {displayDate && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
-                <span className="pill" style={{ background: displayDateBg, color: displayDateColor, fontSize: 10 }}>
-                  {displayDateLabel}
-                </span>
+                {displayDateLabel === "Rescheduled" && (
+                  <span className="pill" style={{ background: displayDateBg, color: displayDateColor, fontSize: 10 }}>
+                    {displayDateLabel}
+                  </span>
+                )}
                 <span style={{ fontSize: 12, color: displayDateColor, fontWeight: 600 }}>
                   {fmtDate(displayDate)}
                 </span>
@@ -219,4 +253,3 @@ function DayListView({ popupDay, leads, userMap, statusColors, statusBgs, onClos
     </>
   );
 }
-
