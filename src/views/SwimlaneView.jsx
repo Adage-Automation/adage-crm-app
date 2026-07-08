@@ -410,7 +410,7 @@ function ActivityDetailCard({ engagement, lead, empMap, onClose }) {
       {lead?.id && (
         <div>
           <a
-            href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+            href={`https://crm-adage-11.odoo.com/odoo/crm/${lead.id}`}
             target="_blank"
             rel="noopener noreferrer"
             style={{

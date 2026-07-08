@@ -190,7 +190,7 @@ function EngagementDetailCard({ engagement, lead, userMap }) {
       {odooLeadId && (
         <div>
           <a
-            href={`https://crm-adage-9.odoo.com/odoo/crm/${odooLeadId}`}
+            href={`https://crm-adage-11.odoo.com/odoo/crm/${odooLeadId}`}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -633,7 +633,7 @@ function ActivityCard({ eng, lead, hasCompleted, hasAnyActivity: hasAnyActivityF
         </div>
         {odooLeadId && (
           <a
-            href={`https://crm-adage-9.odoo.com/odoo/crm/${odooLeadId}`}
+            href={`https://crm-adage-11.odoo.com/odoo/crm/${odooLeadId}`}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(event) => event.stopPropagation()}

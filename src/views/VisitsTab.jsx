@@ -561,7 +561,7 @@ function VisitRow({ eng, lead, dateISO, status, cfg, isAnomaly, personNames, reg
         </div>
         <a
           className="visit-odoo-link"
-          href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+          href={`https://crm-adage-11.odoo.com/odoo/crm/${lead.id}`}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(event) => event.stopPropagation()}

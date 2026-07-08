@@ -530,7 +530,7 @@ function ActivityDetailModal({ engagement, lead, userMap, onClose }) {
         {lead?.id && (
           <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-start" }}>
             <a
-              href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+              href={`https://crm-adage-11.odoo.com/odoo/crm/${lead.id}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -629,7 +629,7 @@ export function LeadCard({ lead, onClose, uniform = false }) {
 
         <div style={{ marginTop: "auto", paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
           <a
-            href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+            href={`https://crm-adage-11.odoo.com/odoo/crm/${lead.id}`}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -716,7 +716,7 @@ export function LeadCard({ lead, onClose, uniform = false }) {
       <div style={{ marginTop: "auto" }}>
         <div style={{ height: 1, background: T.border, marginBottom: 8 }} />
         <a
-          href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+          href={`https://crm-adage-11.odoo.com/odoo/crm/${lead.id}`}
           target="_blank"
           rel="noopener noreferrer"
           style={{
@@ -1245,7 +1245,7 @@ function ListRow({ lead, activity, userMap, onActivityClick, healthHasCompleted,
         </div>
         <a
           className="opp-odoo-link"
-          href={`https://crm-adage-9.odoo.com/odoo/crm/${lead.id}`}
+          href={`https://crm-adage-11.odoo.com/odoo/crm/${lead.id}`}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
