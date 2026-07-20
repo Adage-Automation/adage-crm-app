@@ -9,6 +9,13 @@ import { CalendarDayPopup }  from "./views/CalendarDayPopup";
 import SwimlaneView          from "./views/SwimlaneView";
 import mainLogo from "./logos/Main Logo.png";
 
+// Only these companies' records should ever appear in this dashboard.
+const ALLOWED_COMPANY_NAMES = [
+  "Adage Automation Private Ltd.",
+  "Adage Kanoo Analytical Industry",
+  "Adage Kanoo Industrial Company",
+];
+
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -42,14 +49,53 @@ export default function App() {
   const [popupDetail, setPopupDetail]       = useState(null);
   const [selectedLead, setSelectedLead]     = useState(null);
   const [userMap, setUserMap]               = useState({});
+  const [companies, setCompanies]           = useState([]);
+  const [companyId, setCompanyId]           = useState(() => {
+    const stored = localStorage.getItem("adage_crm_company_id");
+    return stored ? Number(stored) : null;
+  });
+
+  // ── Company list (fetched once, restricted to the companies this dashboard covers) ──
+  useEffect(() => {
+    fetchOdoo("res.company", "search_read", [[["name","in", ALLOWED_COMPANY_NAMES]]], { fields: ["id","name"], order: "name asc" })
+      .then((list) => {
+        const fetched = list || [];
+        setCompanies(fetched);
+        // Guard against a stale localStorage selection pointing at a company
+        // that's no longer in the allowed set (e.g. removed after a prior session).
+        setCompanyId((current) => {
+          if (current && !fetched.some((c) => c.id === current)) {
+            localStorage.removeItem("adage_crm_company_id");
+            return null;
+          }
+          return current;
+        });
+      })
+      .catch((err) => console.warn("company list load error:", err));
+  }, []);
+
+  const handleCompanyChange = useCallback((e) => {
+    const v = e.target.value;
+    const id = v === "" ? null : Number(v);
+    setCompanyId(id);
+    if (id) localStorage.setItem("adage_crm_company_id", String(id));
+    else localStorage.removeItem("adage_crm_company_id");
+  }, []);
 
   // ── Data fetch ──────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      const leadDomain = [["type","=","opportunity"],["active","=",true]];
+      if (companyId) {
+        leadDomain.push(["company_id","=", companyId]);
+      } else if (companies.length > 0) {
+        leadDomain.push(["company_id","in", companies.map(c => c.id)]);
+      }
+
       const [leads, engagements, stages, closedLeads] = await Promise.all([
-        fetchOdoo("crm.lead", "search_read", [[["type","=","opportunity"],["active","=",true]]], {
+        fetchOdoo("crm.lead", "search_read", [leadDomain], {
           fields: ["name","partner_name","partner_id","stage_id","expected_revenue","probability","won_status",
             "x_studio_responsible_region_1","x_studio_expected_month","x_studio_expected_year",
             "x_studio_importance_of_lead","x_studio_customer_type","x_studio_industry_type",
@@ -59,13 +105,13 @@ export default function App() {
             "x_studio_lead_status","x_studio_expected_closing","x_studio_prospect_health"],
           limit: 200,
         }),
-        fetchOdoo("x_crm_lead_line_6bc5b", "search_read", [[]], {
-          fields: ["x_name","x_crm_lead_id","x_studio_engagement_type","x_studio_proposed_date","x_studio_engagement_status","x_studio_visit_by",
-            "x_studio_remarkscommments","x_studio_rescheduled_date","x_studio_engagement_with","x_studio_completed_date"],
+        fetchOdoo("x_crm_lead_line_163b3", "search_read", [[]], {
+          fields: ["x_name","x_crm_lead_id","x_studio_engagement_type","x_studio_planned_date","x_studio_engagement_status","x_studio_action_by",
+            "x_studio_remarkscomments","x_studio_rescheduled_date","x_studio_engagement_with","x_studio_completed_date"],
           limit: 500,
         }),
         fetchOdoo("crm.stage", "search_read", [[]], { fields: ["name","sequence"], order: "sequence asc" }),
-        fetchOdoo("crm.lead", "search_read", [[["type","=","opportunity"],["active","=",true]]], {
+        fetchOdoo("crm.lead", "search_read", [leadDomain], {
           fields: ["stage_id","expected_revenue","active"], limit: 500,
           context: { lang: "en_US" },
         }),
@@ -76,7 +122,7 @@ export default function App() {
 
       const ids = new Set();
       visibleEngagements.forEach(e => {
-        const raw = Array.isArray(e.x_studio_visit_by) ? e.x_studio_visit_by : [e.x_studio_visit_by];
+        const raw = Array.isArray(e.x_studio_action_by) ? e.x_studio_action_by : [e.x_studio_action_by];
         raw.forEach(p => {
           if (!p && p !== 0) return;
           if (typeof p === "object" && !Array.isArray(p) && p.id) ids.add(p.id);
@@ -100,7 +146,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [companyId, companies]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -144,7 +190,7 @@ export default function App() {
 
   const personRegion = {};
   engagements.forEach(e => {
-    const persons = e.x_studio_visit_by || [];
+    const persons = e.x_studio_action_by || [];
     const lead    = leads.find(l => l.id === e.x_crm_lead_id?.[0]);
     const region  = lead?.x_studio_responsible_region_1 || "Unknown";
     const raw     = Array.isArray(persons) ? persons : [persons];
@@ -163,8 +209,8 @@ export default function App() {
     .sort((a,b) => (b.expected_revenue||0) - (a.expected_revenue||0)).slice(0, 8);
 
   const upcomingVisits = [...engagements]
-    .filter(e => e.x_studio_engagement_status === "Planned" && e.x_studio_proposed_date)
-    .sort((a,b) => new Date(a.x_studio_proposed_date) - new Date(b.x_studio_proposed_date)).slice(0, 12);
+    .filter(e => e.x_studio_engagement_status === "Planned" && e.x_studio_planned_date)
+    .sort((a,b) => new Date(a.x_studio_planned_date) - new Date(b.x_studio_planned_date)).slice(0, 12);
 
   const tabs = [
     { id: "pipeline", label: "Pipeline" },
@@ -228,6 +274,28 @@ export default function App() {
           </button>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <select
+            value={companyId ?? ""}
+            onChange={handleCompanyChange}
+            style={{
+              padding: "7px 10px",
+              marginRight: 8,
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 500,
+              fontFamily: "inherit",
+              color: T.textSecondary,
+              background: T.bgCard,
+              border: `1px solid ${T.border}`,
+              cursor: "pointer",
+            }}
+          >
+            <option value="">All Companies</option>
+            {companies.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <div style={{ width: 1, height: 22, background: T.border, marginRight: 8 }} />
           {tabs.map(t => (
             <button key={t.id} className="tab-btn" onClick={() => setActiveTab(t.id)} style={{
               padding: "7px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500,

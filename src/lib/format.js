@@ -29,7 +29,7 @@ export const getPersonName = (p, userMap = {}) => {
 
 /**
  * Resolve all persons from a Many2many visit_by field array.
- * @param {Array} persons - raw x_studio_visit_by value
+ * @param {Array} persons - raw x_studio_action_by value
  * @param {Object} userMap - id → name map
  * @returns {string} comma-separated names or "—"
  */

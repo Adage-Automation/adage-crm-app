@@ -1,6 +1,7 @@
 import { T } from "../constants/theme";
 import { REGION_COLORS } from "../constants/colors";
 import { fmt, fmtDate, getPersonNames } from "../lib/format";
+import { ODOO_BASE_URL } from "../lib/odoo";
 
 const getDisplayDateMeta = (engagement) => {
   const status = engagement?.x_studio_engagement_status;
@@ -35,9 +36,9 @@ const getDisplayDateMeta = (engagement) => {
     };
   }
 
-  if (engagement?.x_studio_proposed_date) {
+  if (engagement?.x_studio_planned_date) {
     return {
-      date: engagement.x_studio_proposed_date,
+      date: engagement.x_studio_planned_date,
       label: "Planned Date",
       detailLabel: "Planned Date",
       color: T.textSecondary,
@@ -110,9 +111,9 @@ function DetailView({ e, leads, userMap, statusColors, statusBgs, onBack }) {
   const { date: detailDate, detailLabel } = getDisplayDateMeta(e);
   const status = e.x_studio_engagement_status || "Unknown";
   const company = lead?.partner_id?.[1] || e.x_crm_lead_id?.[1] || "—";
-  const assignedTo = getPersonNames(e.x_studio_visit_by, userMap);
+  const assignedTo = getPersonNames(e.x_studio_action_by, userMap);
   const orderValue = lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—";
-  const remarks = e.x_studio_remarkscomments || e.x_studio_remarkscommments || "—";
+  const remarks = e.x_studio_remarkscomments || "—";
 
   const Field = ({ label, value, color }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -173,7 +174,7 @@ function DetailView({ e, leads, userMap, statusColors, statusBgs, onBack }) {
         {lead?.id && (
           <div>
             <a
-              href={`https://crm-adage-11.odoo.com/odoo/crm/${lead.id}`}
+              href={`${ODOO_BASE_URL}/odoo/crm/${lead.id}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -233,7 +234,7 @@ function DayListView({ popupDay, leads, userMap, statusColors, statusBgs, onClos
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px" }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary }}>{lead?.partner_id?.[1] || e.x_crm_lead_id?.[1] || "—"}</div>
-              <div style={{ fontSize: 12, color: T.textSecondary }}>{getPersonNames(e.x_studio_visit_by, userMap)}</div>
+              <div style={{ fontSize: 12, color: T.textSecondary }}>{getPersonNames(e.x_studio_action_by, userMap)}</div>
               <div style={{ fontSize: 12, fontWeight: 700, color: lead?.expected_revenue > 0 ? T.success : T.textMuted }}>
                 {lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—"}
               </div>
@@ -261,9 +262,9 @@ function DayListView({ popupDay, leads, userMap, statusColors, statusBgs, onClos
               </div>
             )}
 
-            {e.x_studio_remarkscommments && (
+            {e.x_studio_remarkscomments && (
               <div style={{ marginTop: 8, fontSize: 11, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {e.x_studio_remarkscommments}
+                {e.x_studio_remarkscomments}
               </div>
             )}
           </div>

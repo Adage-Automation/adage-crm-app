@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { T } from "../constants/theme";
 import { REGION_COLORS, PERSON_COLORS } from "../constants/colors";
 import { fmt, fmtDate, getPersonName, getPersonNames } from "../lib/format";
+import { ODOO_BASE_URL } from "../lib/odoo";
 import HealthTag, { hasAnyActivity, hasCompletedActivity } from "../components/HealthTag";
 
 // ---- Local constants (mirrored from VisitsTab) ----
@@ -97,9 +98,9 @@ const getDisplayDateMeta = (engagement) => {
     };
   }
 
-  if (engagement?.x_studio_proposed_date) {
+  if (engagement?.x_studio_planned_date) {
     return {
-      date: engagement.x_studio_proposed_date,
+      date: engagement.x_studio_planned_date,
       label: "Planned Date",
       detailLabel: "Planned Date",
       pillBg: "rgba(100,116,139,0.10)",
@@ -133,9 +134,9 @@ function EngagementDetailCard({ engagement, lead, userMap }) {
   const statusCfg = STATUS_CONFIG[status] || { bg: "#E2E6ED", text: "#4A5568" };
   const odooLeadId = lead?.id || engagement?.x_crm_lead_id?.[0];
   const company = lead?.partner_id?.[1] || engagement.x_crm_lead_id?.[1] || "—";
-  const assignedTo = getPersonNames(engagement.x_studio_visit_by, userMap);
+  const assignedTo = getPersonNames(engagement.x_studio_action_by, userMap);
   const orderValue = lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—";
-  const remarks = engagement.x_studio_remarkscomments || engagement.x_studio_remarkscommments || "—";
+  const remarks = engagement.x_studio_remarkscomments || "—";
   const { date: detailDate, detailLabel } = getDisplayDateMeta(engagement);
 
   const Field = ({ label, value, color }) => (
@@ -190,7 +191,7 @@ function EngagementDetailCard({ engagement, lead, userMap }) {
       {odooLeadId && (
         <div>
           <a
-            href={`https://crm-adage-11.odoo.com/odoo/crm/${odooLeadId}`}
+            href={`${ODOO_BASE_URL}/odoo/crm/${odooLeadId}`}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -229,7 +230,7 @@ function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, u
   const engsByPerson = useMemo(() => {
     const map = {};
     engagements.forEach(eng => {
-      const persons = Array.isArray(eng.x_studio_visit_by) ? eng.x_studio_visit_by : [];
+      const persons = Array.isArray(eng.x_studio_action_by) ? eng.x_studio_action_by : [];
       const names = persons.map(p => getPersonName(p, userMap)).filter(Boolean);
       if (names.length === 0) {
         if (!map["Unassigned"]) map["Unassigned"] = [];
@@ -473,7 +474,7 @@ function WeeklyActivityCard({ engagements, leads, userMap, personKeys, completed
     return engagements.filter(eng => {
       const status = eng.x_studio_engagement_status;
       if (status === "Completed" || status === "Cancelled") return false;
-      const dateToUse = eng.x_studio_rescheduled_date || eng.x_studio_proposed_date;
+      const dateToUse = eng.x_studio_rescheduled_date || eng.x_studio_planned_date;
       return inWeek(dateToUse, mon, sun);
     });
   }, [engagements, mon, sun]);
@@ -481,14 +482,14 @@ function WeeklyActivityCard({ engagements, leads, userMap, personKeys, completed
   // Urgency priority order
   const urgencyOrder = { overdue: 0, urgent: 1, soon: 2, none: 3 };
   const effectiveDate = (eng) => {
-    return eng.x_studio_rescheduled_date || eng.x_studio_proposed_date;
+    return eng.x_studio_rescheduled_date || eng.x_studio_planned_date;
   };
 
   // Group by person (many2many expansion)
   const groups = useMemo(() => {
     const map = {};
     weekEngs.forEach(eng => {
-      const persons = Array.isArray(eng.x_studio_visit_by) ? eng.x_studio_visit_by : [];
+      const persons = Array.isArray(eng.x_studio_action_by) ? eng.x_studio_action_by : [];
       const names = persons.map(p => getPersonName(p, userMap)).filter(Boolean);
       const keys = names.length > 0 ? names : ["Unassigned"];
       keys.forEach(name => {
@@ -633,7 +634,7 @@ function ActivityCard({ eng, lead, hasCompleted, hasAnyActivity: hasAnyActivityF
         </div>
         {odooLeadId && (
           <a
-            href={`https://crm-adage-11.odoo.com/odoo/crm/${odooLeadId}`}
+            href={`${ODOO_BASE_URL}/odoo/crm/${odooLeadId}`}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(event) => event.stopPropagation()}
@@ -696,7 +697,7 @@ function OverdueActivityCard({ engagements, leads, userMap, personKeys, complete
     return engagements.filter(eng => {
       const status = eng.x_studio_engagement_status;
       if (status === "Completed" || status === "Cancelled" || status === "Done") return false;
-      const dateStr = eng.x_studio_rescheduled_date || eng.x_studio_proposed_date;
+      const dateStr = eng.x_studio_rescheduled_date || eng.x_studio_planned_date;
       if (!dateStr) return false;
       const [y, m, d] = dateStr.split("T")[0].split("-").map(Number);
       const engDate = new Date(y, m - 1, d);
@@ -707,13 +708,13 @@ function OverdueActivityCard({ engagements, leads, userMap, personKeys, complete
   // Urgency priority order
   const urgencyOrder = { overdue: 0, urgent: 1, soon: 2, none: 3 };
   const effectiveDate = (eng) => {
-    return eng.x_studio_rescheduled_date || eng.x_studio_proposed_date;
+    return eng.x_studio_rescheduled_date || eng.x_studio_planned_date;
   };
 
   const groups = useMemo(() => {
     const map = {};
     overdueEngs.forEach(eng => {
-      const persons = Array.isArray(eng.x_studio_visit_by) ? eng.x_studio_visit_by : [];
+      const persons = Array.isArray(eng.x_studio_action_by) ? eng.x_studio_action_by : [];
       const names = persons.map(p => getPersonName(p, userMap)).filter(Boolean);
       const keys = names.length > 0 ? names : ["Unassigned"];
       keys.forEach(name => {

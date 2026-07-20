@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchOdoo } from "../lib/odoo";
+import { fetchOdoo, ODOO_BASE_URL } from "../lib/odoo";
 
 // ─── Theme tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -189,7 +189,7 @@ function Pill({ engagement, lead, isFollowUp, empMap, isSelected, onClick }) {
     `Status: ${status}`,
     displayDateLabel && displayDate ? `${displayDateLabel}: ${fmtDate(displayDate)}` : null,
     engagement.x_studio_next_follow_up_date ? `Follow-up: ${fmtDate(engagement.x_studio_next_follow_up_date)}` : null,
-    engagement.x_studio_remarkscommments ? `Remarks: ${engagement.x_studio_remarkscommments}` : null,
+    engagement.x_studio_remarkscomments ? `Remarks: ${engagement.x_studio_remarkscomments}` : null,
     isAnomaly ? "⚠ Visit done but status not updated" : null,
   ].filter(Boolean).join("\n");
 
@@ -312,9 +312,9 @@ const getDisplayDateMeta = (engagement) => {
     };
   }
 
-  if (engagement?.x_studio_proposed_date) {
+  if (engagement?.x_studio_planned_date) {
     return {
-      date: engagement.x_studio_proposed_date,
+      date: engagement.x_studio_planned_date,
       label: "Planned Date",
       color: T.textPrimary,
     };
@@ -341,12 +341,12 @@ function ActivityDetailCard({ engagement, lead, empMap, onClose }) {
   const status = engagement.x_studio_engagement_status || "Unknown";
   const statusCfg = STATUS_CONFIG[status] || STATUS_CONFIG.Unknown;
   const company = lead?.partner_id?.[1] || engagement.x_crm_lead_id?.[1] || "—";
-  const assignedTo = (Array.isArray(engagement.x_studio_visit_by) ? engagement.x_studio_visit_by : [])
+  const assignedTo = (Array.isArray(engagement.x_studio_action_by) ? engagement.x_studio_action_by : [])
     .map((person) => resolveEmpName(person, empMap))
     .filter(Boolean)
     .join(", ") || "—";
   const orderValue = lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—";
-  const remarks = engagement.x_studio_remarkscomments || engagement.x_studio_remarkscommments || "—";
+  const remarks = engagement.x_studio_remarkscomments || "—";
   const { date: detailDate, label: detailLabel } = getDisplayDateMeta(engagement);
 
   const Field = ({ label, value, color }) => (
@@ -410,7 +410,7 @@ function ActivityDetailCard({ engagement, lead, empMap, onClose }) {
       {lead?.id && (
         <div>
           <a
-            href={`https://crm-adage-11.odoo.com/odoo/crm/${lead.id}`}
+            href={`${ODOO_BASE_URL}/odoo/crm/${lead.id}`}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -444,7 +444,7 @@ function ListView({ engagements, leadMap, empMap, daySet, allPeople, selectedPeo
     if (!date || !daySet.has(date)) return false;
     if (selectedStatuses && selectedStatuses.length > 0 && !selectedStatuses.includes(e.x_studio_engagement_status)) return false;
     if (selectedPeople.length > 0) {
-      const persons = Array.isArray(e.x_studio_visit_by) ? e.x_studio_visit_by : [];
+      const persons = Array.isArray(e.x_studio_action_by) ? e.x_studio_action_by : [];
       const names = persons.map(p => resolveEmpName(p, empMap)).filter(Boolean);
       if (!names.some(n => selectedPeople.includes(n))) return false;
     }
@@ -517,7 +517,7 @@ function ListView({ engagements, leadMap, empMap, daySet, allPeople, selectedPeo
               const status = e.x_studio_engagement_status || "Unknown";
               const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.Unknown;
               const isAnomaly = e.x_studio_completed_date && status === "Planned";
-              const persons = Array.isArray(e.x_studio_visit_by) ? e.x_studio_visit_by : [];
+              const persons = Array.isArray(e.x_studio_action_by) ? e.x_studio_action_by : [];
               const personNames = persons.map(p => resolveEmpName(p, empMap)).filter(Boolean);
               const isSelected = selectedPill && selectedPill.engId === e.id;
 
@@ -625,7 +625,7 @@ function ListRow({ e, lead, status, cfg, isAnomaly, personNames, personColorMap,
 
       {/* Remarks */}
       <div style={{ fontSize: 12, color: T.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {e.x_studio_remarkscommments || "—"}
+        {e.x_studio_remarkscomments || "—"}
       </div>
     </div>
   );
@@ -723,15 +723,15 @@ export default function SwimlaneView() {
       const orDomain = [
         "|",
         "|",
-        "&", ["x_studio_proposed_date", ">=", rangeStartISO], ["x_studio_proposed_date", "<=", rangeEndISO],
+        "&", ["x_studio_planned_date", ">=", rangeStartISO], ["x_studio_planned_date", "<=", rangeEndISO],
         "&", ["x_studio_rescheduled_date", ">=", rangeStartISO], ["x_studio_rescheduled_date", "<=", rangeEndISO],
         "&", ["x_studio_completed_date", ">=", rangeStartISO], ["x_studio_completed_date", "<=", rangeEndISO],
       ];
-      const rawEngagements = await fetchOdoo("x_crm_lead_line_6bc5b", "search_read", [orDomain], {
+      const rawEngagements = await fetchOdoo("x_crm_lead_line_163b3", "search_read", [orDomain], {
         fields: [
-          "x_studio_proposed_date", "x_studio_rescheduled_date", "x_studio_completed_date",
+          "x_studio_planned_date", "x_studio_rescheduled_date", "x_studio_completed_date",
           "x_studio_engagement_type", "x_studio_engagement_status",
-          "x_studio_visit_by", "x_crm_lead_id", "x_studio_remarkscommments", "x_studio_engagement_with",
+          "x_studio_action_by", "x_crm_lead_id", "x_studio_remarkscomments", "x_studio_engagement_with",
         ],
         limit: 1000,
       });
@@ -739,7 +739,7 @@ export default function SwimlaneView() {
 
       const empIds = new Set();
       engList.forEach(e => {
-        (Array.isArray(e.x_studio_visit_by) ? e.x_studio_visit_by : []).forEach(p => {
+        (Array.isArray(e.x_studio_action_by) ? e.x_studio_action_by : []).forEach(p => {
           const id = resolveEmpId(p); if (id) empIds.add(id);
         });
       });
@@ -809,7 +809,7 @@ export default function SwimlaneView() {
   engagements
     .filter(eng => selectedStatuses.length === 0 || selectedStatuses.includes(eng.x_studio_engagement_status))
     .forEach(eng => {
-    const persons = Array.isArray(eng.x_studio_visit_by) ? eng.x_studio_visit_by : [];
+    const persons = Array.isArray(eng.x_studio_action_by) ? eng.x_studio_action_by : [];
     const empEntries = persons.length > 0
       ? persons.map(p => ({ id: resolveEmpId(p), name: resolveEmpName(p, empMap) })).filter(e => e.id)
       : [{ id: 0, name: "Unassigned" }];

@@ -6,6 +6,12 @@
  * Prod → api/odoo.js (Vercel serverless function)
  */
 
+// Base URL of the Odoo instance (e.g. https://adage-automation.odoo.com), used to build
+// "open in Odoo" links. Read from the same VITE_ODOO_URL used to configure the proxy, so the
+// instance only needs to be changed in one place (.env). Safe to expose client-side — it's just
+// the public web app URL, already embedded in clickable link hrefs.
+export const ODOO_BASE_URL = import.meta.env.VITE_ODOO_URL || "";
+
 export const fetchOdoo = async (model, method, args = [], kwargs = {}) => {
   const res = await fetch("/api/odoo", {
     method: "POST",

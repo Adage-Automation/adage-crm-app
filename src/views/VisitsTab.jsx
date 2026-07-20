@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { T } from "../constants/theme";
 import { REGION_COLORS } from "../constants/colors";
 import { fmt, getPersonName } from "../lib/format";
+import { ODOO_BASE_URL } from "../lib/odoo";
 
 // ---- Local constants ----
 const STATUS_CONFIG = {
@@ -71,9 +72,9 @@ function getEngagementDisplayDateMeta(engagement) {
       color: "#F97316",
     };
   }
-  if (engagement?.x_studio_proposed_date) {
+  if (engagement?.x_studio_planned_date) {
     return {
-      date: engagement.x_studio_proposed_date,
+      date: engagement.x_studio_planned_date,
       detailLabel: "Planned Date",
       color: T.textPrimary,
     };
@@ -246,7 +247,7 @@ export function VisitsTab({ leads, engagements, userMap }) {
   }, [leads]);
 
   const getPersonNames = (eng) => {
-    const raw = Array.isArray(eng.x_studio_visit_by) ? eng.x_studio_visit_by : [];
+    const raw = Array.isArray(eng.x_studio_action_by) ? eng.x_studio_action_by : [];
     return raw.map(p => getPersonName(p, userMap)).filter(Boolean);
   };
 
@@ -561,7 +562,7 @@ function VisitRow({ eng, lead, dateISO, status, cfg, isAnomaly, personNames, reg
         </div>
         <a
           className="visit-odoo-link"
-          href={`https://crm-adage-11.odoo.com/odoo/crm/${lead.id}`}
+          href={`${ODOO_BASE_URL}/odoo/crm/${lead.id}`}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(event) => event.stopPropagation()}
@@ -622,10 +623,10 @@ function VisitRow({ eng, lead, dateISO, status, cfg, isAnomaly, personNames, reg
 
       {/* Remarks */}
       <div
-        title={eng.x_studio_remarkscommments || ""}
+        title={eng.x_studio_remarkscomments || ""}
         style={{
           fontSize: 11,
-          color: eng.x_studio_remarkscommments ? T.textSecondary : T.textMuted,
+          color: eng.x_studio_remarkscomments ? T.textSecondary : T.textMuted,
           lineHeight: 1.4,
           overflow: "hidden",
           display: "-webkit-box",
@@ -634,7 +635,7 @@ function VisitRow({ eng, lead, dateISO, status, cfg, isAnomaly, personNames, reg
           wordBreak: "break-word",
         }}
       >
-        {eng.x_studio_remarkscommments || "—"}
+        {eng.x_studio_remarkscomments || "—"}
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import ReactDOM from "react-dom";
 import { T } from "../constants/theme";
 import { REGION_COLORS, PERSON_COLORS } from "../constants/colors";
 import { fmt, getPersonNames } from "../lib/format";
+import { ODOO_BASE_URL } from "../lib/odoo";
 import HealthSpeedometer from "../components/HealthSpeedometer";
 import HealthTag, {
   AGGREGATE_TOOLTIP_TEXT,
@@ -418,9 +419,9 @@ function getEngagementDisplayDateMeta(engagement) {
       bg: "rgba(245,158,11,0.14)",
     };
   }
-  if (engagement?.x_studio_proposed_date) {
+  if (engagement?.x_studio_planned_date) {
     return {
-      date: engagement.x_studio_proposed_date,
+      date: engagement.x_studio_planned_date,
       label: "Planned Date",
       detailLabel: "Planned Date",
       color: "#64748B",
@@ -466,9 +467,9 @@ function ActivityDetailModal({ engagement, lead, userMap, onClose }) {
   if (!engagement) return null;
 
   const status = engagement.x_studio_engagement_status || "Unknown";
-  const assignedTo = getPersonNames(engagement.x_studio_visit_by, userMap);
+  const assignedTo = getPersonNames(engagement.x_studio_action_by, userMap);
   const customer = lead?.partner_id?.[1] || engagement.x_crm_lead_id?.[1] || "—";
-  const remarks = engagement.x_studio_remarkscomments || engagement.x_studio_remarkscommments || "—";
+  const remarks = engagement.x_studio_remarkscomments || "—";
   const { date: detailDate, detailLabel, label: datePillLabel, color: datePillColor, bg: datePillBg } = getEngagementDisplayDateMeta(engagement);
   const statusColors = { Planned: T.accent, Completed: T.success, Cancelled: T.danger, Rescheduled: "#F59E0B" };
   const statusBgs = { Planned: T.accentBg, Completed: T.successBg, Cancelled: T.dangerBg, Rescheduled: T.warningBg };
@@ -530,7 +531,7 @@ function ActivityDetailModal({ engagement, lead, userMap, onClose }) {
         {lead?.id && (
           <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-start" }}>
             <a
-              href={`https://crm-adage-11.odoo.com/odoo/crm/${lead.id}`}
+              href={`${ODOO_BASE_URL}/odoo/crm/${lead.id}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -629,7 +630,7 @@ export function LeadCard({ lead, onClose, uniform = false }) {
 
         <div style={{ marginTop: "auto", paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
           <a
-            href={`https://crm-adage-11.odoo.com/odoo/crm/${lead.id}`}
+            href={`${ODOO_BASE_URL}/odoo/crm/${lead.id}`}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -716,7 +717,7 @@ export function LeadCard({ lead, onClose, uniform = false }) {
       <div style={{ marginTop: "auto" }}>
         <div style={{ height: 1, background: T.border, marginBottom: 8 }} />
         <a
-          href={`https://crm-adage-11.odoo.com/odoo/crm/${lead.id}`}
+          href={`${ODOO_BASE_URL}/odoo/crm/${lead.id}`}
           target="_blank"
           rel="noopener noreferrer"
           style={{
@@ -1220,7 +1221,7 @@ function ListRow({ lead, activity, userMap, onActivityClick, healthHasCompleted,
   const company = lead.partner_id?.[1] || lead.partner_name || "—";
   const closingLabel = formatClosingCellDate(lead.x_studio_expected_closing);
   const projectType = lead.x_studio_project_background || "—";
-  const activityAssigned = activity ? getPersonNames(activity.x_studio_visit_by, userMap) : "—";
+  const activityAssigned = activity ? getPersonNames(activity.x_studio_action_by, userMap) : "—";
   return (
     <div
       className="pipeline-list-row"
@@ -1245,7 +1246,7 @@ function ListRow({ lead, activity, userMap, onActivityClick, healthHasCompleted,
         </div>
         <a
           className="opp-odoo-link"
-          href={`https://crm-adage-11.odoo.com/odoo/crm/${lead.id}`}
+          href={`${ODOO_BASE_URL}/odoo/crm/${lead.id}`}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
