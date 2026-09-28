@@ -2,12 +2,12 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { T } from "../constants/theme";
 import { REGION_COLORS, PERSON_COLORS } from "../constants/colors";
-import { fmt, getPersonNames } from "../lib/format";
+import { fmt, getPersonNames, getPersonName } from "../lib/format";
 import { ODOO_BASE_URL } from "../lib/odoo";
 import { CURRENCY_OPTIONS, FALLBACK_RATES, fetchFxRates, convertAmount, fmtByCurrency } from "../lib/currency";
 import HealthSpeedometer from "../components/HealthSpeedometer";
 import HealthTag, {
-  AGGREGATE_TOOLTIP_TEXT,
+  AggregateTooltipContent,
   getClosestHealthTier,
   hasAnyActivity,
   hasCompletedActivity,
@@ -322,30 +322,77 @@ function MultiSelect({ label, options, selected, onChange, searchable = false, s
   );
 }
 
-function FilterSelect({ value, onChange, options, width = 150 }) {
+function FilterSelect({ value, onChange, options, prefix = "", width = 150 }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handlePointerDown = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    const handleEscape = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [open]);
+
+  const selected = options.find((opt) => opt.value === value);
+
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      style={{
-        width,
-        minWidth: width,
-        padding: "6px 28px 6px 12px",
-        borderRadius: 999,
-        border: `1px solid ${T.border}`,
-        background: T.bgCard,
-        color: T.accent,
-        fontSize: 12,
-        fontWeight: 600,
-        fontFamily: "inherit",
-        outline: "none",
-        cursor: "pointer",
-      }}
-    >
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>{opt.label}</option>
-      ))}
-    </select>
+    <div ref={ref} style={{ position: "relative", width, minWidth: width, flexShrink: 0 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          width: "100%",
+          padding: "6px 28px 6px 12px",
+          borderRadius: 999,
+          border: `1px solid ${T.border}`,
+          background: T.bgCard,
+          color: T.accent,
+          fontSize: 12,
+          fontWeight: 600,
+          fontFamily: "inherit",
+          outline: "none",
+          cursor: "pointer",
+          textAlign: "left",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {prefix}{selected?.label ?? value}
+      </button>
+      <span style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: T.accent, pointerEvents: "none" }}>{open ? "▲" : "▼"}</span>
+      {open && (
+        <div
+          style={{
+            position: "absolute", top: "calc(100% + 4px)", left: 0, minWidth: "100%", zIndex: 300,
+            background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10,
+            boxShadow: "0 12px 28px rgba(15, 23, 42, 0.16)", maxHeight: 260, overflowY: "auto",
+          }}
+        >
+          {options.map((opt) => (
+            <div
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              style={{
+                padding: "8px 14px", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap",
+                background: opt.value === value ? T.accentBg : "transparent",
+                color: opt.value === value ? T.accent : T.textPrimary,
+                fontWeight: opt.value === value ? 700 : 500,
+              }}
+            >
+              {opt.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -573,7 +620,12 @@ export function LeadCard({ lead, onClose, uniform = false }) {
   const Field = ({ label, value, color }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
       <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 600, letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 12, color: color || T.textPrimary, fontWeight: 500, lineHeight: 1.35, overflowWrap: "anywhere", wordBreak: "break-word", ...(uniform ? { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } : null) }}>{value || "—"}</div>
+      <div
+        title={uniform && value ? value : undefined}
+        style={{ fontSize: 12, color: color || T.textPrimary, fontWeight: 500, lineHeight: 1.35, overflowWrap: "anywhere", wordBreak: "break-word", ...(uniform ? { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } : null) }}
+      >
+        {value || "—"}
+      </div>
     </div>
   );
 
@@ -748,8 +800,28 @@ const getProjectTypePill = (type) =>
 // STATUS_COLORS replaced by getPill() / STATUS_PILL at the top of file.
 
 // ─── Reusable interactive donut ──────────────────────────────────────────────
-function InteractiveDonut({ title, segments, total, centerLabel, onSegmentClick, activeKey, legendMaxHeight = null }) {
+function InteractiveDonut({ title, infoText = null, segments, total, centerLabel, onSegmentClick, activeKey, legendMaxHeight = null }) {
   const [hoveredKey, setHoveredKey] = useState(null);
+  const [showInfo, setShowInfo] = useState(false);
+  const [hoveringInfo, setHoveringInfo] = useState(false);
+  const infoRef = useRef(null);
+
+  useEffect(() => {
+    if (!showInfo) return undefined;
+    const handlePointerDown = (event) => {
+      if (infoRef.current && !infoRef.current.contains(event.target)) setShowInfo(false);
+    };
+    const handleEscape = (event) => {
+      if (event.key === "Escape") setShowInfo(false);
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [showInfo]);
+
   const size = 120, cx = size / 2, cy = size / 2;
   const R_BASE = 44, R_HOVER = 48;
   const SW_BASE = 14, SW_HOVER = 11;
@@ -770,7 +842,66 @@ function InteractiveDonut({ title, segments, total, centerLabel, onSegmentClick,
 
   return (
     <div className="card" style={{ padding: "14px 16px" }}>
-      <div style={{ fontSize: 10, color: T.textMuted, letterSpacing: "0.8px", textTransform: "uppercase", fontWeight: 700, marginBottom: 10 }}>{title}</div>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6, marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: T.textMuted, letterSpacing: "0.8px", textTransform: "uppercase", fontWeight: 700 }}>{title}</div>
+        {infoText && (
+          <div ref={infoRef} style={{ position: "relative", flexShrink: 0 }}>
+            <button
+              type="button"
+              aria-label={`What does "${title}" mean?`}
+              onMouseEnter={() => { setHoveringInfo(true); setShowInfo(true); }}
+              onMouseLeave={() => setHoveringInfo(false)}
+              onClick={() => setShowInfo((v) => !v)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 14,
+                height: 14,
+                padding: 0,
+                borderRadius: "50%",
+                border: `1px solid ${showInfo || hoveringInfo ? T.accent : T.textMuted}`,
+                background: "none",
+                color: showInfo || hoveringInfo ? T.accent : T.textMuted,
+                fontSize: 9,
+                fontWeight: 700,
+                lineHeight: 1,
+                fontFamily: "inherit",
+                cursor: "pointer",
+                transition: "color 0.15s ease, border-color 0.15s ease",
+              }}
+            >
+              ?
+            </button>
+            {showInfo && (
+              <div
+                role="tooltip"
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 8px)",
+                  right: 0,
+                  width: 240,
+                  maxWidth: "min(240px, calc(100vw - 40px))",
+                  background: T.bgCard,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 12,
+                  boxShadow: "0 12px 28px rgba(15, 23, 42, 0.16)",
+                  padding: "10px 12px",
+                  zIndex: 30,
+                  fontSize: 11,
+                  fontWeight: 400,
+                  textTransform: "none",
+                  letterSpacing: "normal",
+                  color: T.textSecondary,
+                  lineHeight: 1.45,
+                }}
+              >
+                {infoText}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
       {segs.length === 0 ? (
         <div style={{ color: T.textMuted, fontSize: 12, textAlign: "center", padding: "18px 0" }}>No data</div>
       ) : (
@@ -998,7 +1129,17 @@ function GreenfieldDonut({ leads, onSegmentClick, activeKey }) {
   const entries = Object.entries(counts).sort((a, b) => b[1].rev - a[1].rev);
   const total = entries.reduce((s, [, d]) => s + d.rev, 0) || 1;
   const segments = entries.map(([key, d]) => ({ key, ...d }));
-  return <InteractiveDonut title="Greenfield vs Brownfield" segments={segments} total={total} centerLabel="Total" onSegmentClick={onSegmentClick} activeKey={activeKey} />;
+  return (
+    <InteractiveDonut
+      title="Greenfield vs Brownfield"
+      infoText="Greenfield refers to projects or investments on undeveloped land, while brownfield involves redevelopment or expansion of existing sites."
+      segments={segments}
+      total={total}
+      centerLabel="Total"
+      onSegmentClick={onSegmentClick}
+      activeKey={activeKey}
+    />
+  );
 }
 
 // Segment color per native currency, shown as stacked bar segments in MonthBar.
@@ -1194,7 +1335,6 @@ function OverallProspectHealthCard({ leads, engagementsByLead }) {
     : null;
 
   const averageLabel = averagePosition == null ? null : getClosestHealthTier(averagePosition);
-  const tooltipText = AGGREGATE_TOOLTIP_TEXT;
 
   return (
     <div className="card" style={{ padding: "14px 14px", display: "flex", flexDirection: "column", minWidth: 0 }}>
@@ -1208,33 +1348,34 @@ function OverallProspectHealthCard({ leads, engagementsByLead }) {
             setHoveringInfo(true);
             setShowInfo(true);
           }}
-          onMouseLeave={() => {
-            setHoveringInfo(false);
-            setShowInfo(false);
-          }}
+          onMouseLeave={() => setHoveringInfo(false)}
           style={{ position: "relative", flexShrink: 0 }}
         >
           <button
             type="button"
-            onClick={() => setShowInfo(true)}
+            aria-label="How is Overall Prospect Health calculated?"
+            onClick={() => setShowInfo((v) => !v)}
             style={{
-              background: "none",
-              border: "none",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 14,
+              height: 14,
               padding: 0,
               margin: 0,
-              display: "block",
-              alignSelf: "flex-start",
-              verticalAlign: "top",
-              fontSize: 8,
+              borderRadius: "50%",
+              border: `1px solid ${showInfo || hoveringInfo ? T.accent : T.textMuted}`,
+              background: "none",
+              fontSize: 9,
+              fontWeight: 700,
               color: showInfo || hoveringInfo ? T.accent : T.textMuted,
               lineHeight: 1,
               cursor: "pointer",
               fontFamily: "inherit",
-              whiteSpace: "nowrap",
-              transition: "color 0.15s ease",
+              transition: "color 0.15s ease, border-color 0.15s ease",
             }}
           >
-            How this is calculated?
+            ?
           </button>
           {showInfo && (
             <div
@@ -1242,22 +1383,22 @@ function OverallProspectHealthCard({ leads, engagementsByLead }) {
                 position: "absolute",
                 top: "calc(100% + 8px)",
                 right: 0,
-                width: 320,
-                maxWidth: "min(320px, calc(100vw - 40px))",
+                width: 660,
+                maxWidth: "min(660px, calc(100vw - 40px))",
                 background: T.bgCard,
                 border: `1px solid ${T.border}`,
                 borderRadius: 12,
                 boxShadow: "0 12px 28px rgba(15, 23, 42, 0.16)",
-                padding: "12px 14px",
+                padding: "14px 18px",
+                maxHeight: "min(750px, calc(100vh - 100px))",
+                overflowY: "auto",
                 zIndex: 30,
               }}
             >
               <div style={{ fontSize: 10, fontWeight: 800, color: T.textPrimary, marginBottom: 8, letterSpacing: "0.4px", textTransform: "uppercase" }}>
                 How this is calculated
               </div>
-              <div style={{ whiteSpace: "pre-wrap", fontSize: 11, color: T.textSecondary, lineHeight: 1.45 }}>
-                {tooltipText}
-              </div>
+              <AggregateTooltipContent />
             </div>
           )}
         </div>
@@ -1305,14 +1446,17 @@ function OverallProspectHealthCard({ leads, engagementsByLead }) {
 }
 
 // ─── List row ─────────────────────────────────────────────────────────────────
-const LIST_GRID_COLUMNS = "2fr 120px 110px 100px 130px 110px minmax(190px, 1.25fr)";
-const LIST_HEADER_LABELS = ["Opportunity Name", "Closing & Status", "Expected Value", "Region", "Assigned Salesperson", "Project Type", "Activities"];
+const LIST_GRID_COLUMNS = "2fr 140px 120px 110px 100px 130px 110px minmax(190px, 1.25fr)";
+const LIST_HEADER_LABELS = ["Opportunity Name", "Bidders", "Closing & Status", "Expected Value", "Region", "Assigned Salesperson", "Project Type", "Activities"];
 
-function ListRow({ lead, activity, userMap, onActivityClick, healthHasCompleted, healthHasAnyActivity }) {
+function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, healthHasCompleted, healthHasAnyActivity }) {
   const [hovered, setHovered] = useState(false);
   const regionColor = REGION_COLORS[lead.x_studio_responsible_region_1] || T.textMuted;
   const salesperson = lead.x_studio_assigned_salesperson?.[1] || "—";
-  const company = lead.partner_id?.[1] || lead.partner_name || "—";
+  const company = lead.partner_id?.[1] || lead.partner_name || lead.x_studio_end_user?.[1] || "—";
+  const bidderNames = (Array.isArray(lead.x_studio_bidders) ? lead.x_studio_bidders : [])
+    .map((p) => getPersonName(p, bidderMap))
+    .filter(Boolean);
   const closingLabel = formatClosingCellDate(lead.x_studio_expected_closing);
   const projectType = lead.x_studio_project_background || "—";
   const activityAssigned = activity ? getPersonNames(activity.x_studio_action_by, userMap) : "—";
@@ -1347,6 +1491,24 @@ function ListRow({ lead, activity, userMap, onActivityClick, healthHasCompleted,
         >
           View in Odoo ↗
         </a>
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+        {bidderNames.length > 0
+          ? bidderNames.map((name) => (
+              <span
+                key={name}
+                title={name}
+                style={{
+                  fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 999,
+                  background: "#F1F5F9", color: "#475569",
+                  maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}
+              >
+                {name}
+              </span>
+            ))
+          : <span style={{ color: "#d1d5db", fontSize: 13 }}>—</span>}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
@@ -1420,14 +1582,18 @@ function ListRow({ lead, activity, userMap, onActivityClick, healthHasCompleted,
 
 
 // ─── Main PipelineTab ─────────────────────────────────────────────────────────
-export function PipelineTab({ leads, engagements = [], userMap = {} }) {
+export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap = {} }) {
   const defaultPeriod = "This Year";
   const [viewMode, setViewMode] = useState("list");
   const [groupBy, setGroupBy] = useState("status");
   const [filterRegion, setFilterRegion] = useState([]);
   const [statusFilter, setStatusFilter] = useState("ACTIVE");
   const [filterPerson, setFilterPerson] = useState([]);
-  const [filterCustomer, setFilterCustomer] = useState([]);
+  const [filterSbu, setFilterSbu] = useState([]);
+  const [filterBidder, setFilterBidder] = useState([]);
+  const [filterEndUser, setFilterEndUser] = useState([]);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const filterPanelRef = useRef(null);
   const [dateFrom, setDateFrom] = useState(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1451,9 +1617,14 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
 
   // Dropdown options
   const regionOptions = useMemo(() => [...new Set(leads.map(l => l.x_studio_responsible_region_1).filter(Boolean))].sort(), [leads]);
+  const sbuOptions = useMemo(() => [...new Set(leads.map(l => l.x_studio_sbu).filter(Boolean))].sort(), [leads]);
   const personOptions = useMemo(() => [...new Set(leads.map(l => l.x_studio_assigned_salesperson?.[1]).filter(Boolean))].sort(), [leads]);
-  const customerOptions = useMemo(
-    () => [...new Set(leads.map((l) => l.partner_id?.[1] || l.partner_name).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+  const bidderOptions = useMemo(
+    () => [...new Set(leads.flatMap((l) => (Array.isArray(l.x_studio_bidders) ? l.x_studio_bidders : []).map((p) => getPersonName(p, bidderMap))).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [leads, bidderMap]
+  );
+  const endUserOptions = useMemo(
+    () => [...new Set(leads.map((l) => l.x_studio_end_user?.[1]).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [leads]
   );
   const statusOptions = useMemo(() => {
@@ -1462,20 +1633,42 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
     const rest = unique.filter((s) => !ordered.includes(s)).sort();
     return ["All Statuses", ...ordered.filter((s) => unique.includes(s)), ...rest].map((value) => ({
       value,
-      label: `Status: ${value === "All Statuses" ? "All" : value}`,
+      label: value === "All Statuses" ? "All" : value,
     }));
   }, [leads]);
   const periodOptions = useMemo(() => ([
-    { value: "All Time", label: "Period: All Time" },
-    { value: "This Month", label: "Period: This Month" },
-    { value: "This Quarter", label: "Period: This Quarter" },
-    { value: "This Year", label: "Period: This Year" },
-    { value: "Last 6 Months", label: "Period: Last 6 Months" },
-    { value: "Last 12 Months", label: "Period: Last 12 Months" },
-    { value: "Custom Range", label: "Period: Custom Range" },
+    { value: "All Time", label: "All Time" },
+    { value: "This Month", label: "This Month" },
+    { value: "This Quarter", label: "This Quarter" },
+    { value: "This Year", label: "This Year" },
+    { value: "Last 6 Months", label: "Last 6 Months" },
+    { value: "Last 12 Months", label: "Last 12 Months" },
+    { value: "Custom Range", label: "Custom Range" },
+  ]), []);
+  const groupByOptions = useMemo(() => ([
+    { value: "status", label: "Lead Status" },
+    { value: "region", label: "Region" },
+    { value: "person", label: "Person" },
+    { value: "label", label: "Label" },
+    { value: "bidder", label: "Bidders" },
+    { value: "enduser", label: "End User" },
+    { value: "sbu", label: "SBU Type" },
   ]), []);
 
   useEffect(() => { setDonutFilter(null); }, [groupBy]);
+  useEffect(() => {
+    if (!showFilterPanel) return undefined;
+    const handlePointerDown = (e) => {
+      if (filterPanelRef.current && !filterPanelRef.current.contains(e.target)) setShowFilterPanel(false);
+    };
+    const handleEscape = (e) => { if (e.key === "Escape") setShowFilterPanel(false); };
+    document.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [showFilterPanel]);
   useEffect(() => {
     if (periodFilter === "Custom Range") return;
     const today = new Date();
@@ -1516,9 +1709,14 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
   const filteredLeads = useMemo(() => {
     return leads.filter(l => {
       if (filterRegion.length > 0 && !filterRegion.includes(l.x_studio_responsible_region_1)) return false;
+      if (filterSbu.length > 0 && !filterSbu.includes(l.x_studio_sbu)) return false;
       if (statusFilter !== "All Statuses" && l.x_studio_lead_status !== statusFilter) return false;
       if (filterPerson.length > 0 && !filterPerson.includes(l.x_studio_assigned_salesperson?.[1])) return false;
-      if (filterCustomer.length > 0 && !filterCustomer.includes(l.partner_id?.[1] || l.partner_name)) return false;
+      if (filterBidder.length > 0) {
+        const leadBidderNames = (Array.isArray(l.x_studio_bidders) ? l.x_studio_bidders : []).map((p) => getPersonName(p, bidderMap));
+        if (!leadBidderNames.some((name) => filterBidder.includes(name))) return false;
+      }
+      if (filterEndUser.length > 0 && !filterEndUser.includes(l.x_studio_end_user?.[1])) return false;
       if (dateFrom || dateTo) {
         const d = parseISODate(l.x_studio_expected_closing);
         if (!d) return false;
@@ -1578,7 +1776,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
       }
       return true;
     });
-  }, [leads, filterRegion, statusFilter, filterPerson, filterCustomer, donutFilter, filterProjectType, selectedMonth, selectedMonthCurrency, searchQuery, dateFrom, dateTo]);
+  }, [leads, filterRegion, filterSbu, statusFilter, filterPerson, filterBidder, filterEndUser, bidderMap, donutFilter, filterProjectType, selectedMonth, selectedMonthCurrency, searchQuery, dateFrom, dateTo]);
 
   // Group + sort
   const groups = useMemo(() => {
@@ -1588,7 +1786,9 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
       if (groupBy === "region") key = l.x_studio_responsible_region_1 || "No Region";
       else if (groupBy === "person") key = l.x_studio_assigned_salesperson?.[1] || "Unassigned";
       else if (groupBy === "label") key = getLeadLabelMeta(l, engagementsByLead).text || "Not yet scored";
-      else if (groupBy === "customer") key = l.partner_id?.[1] || l.partner_name || "No Customer";
+      else if (groupBy === "bidder") key = (Array.isArray(l.x_studio_bidders) && l.x_studio_bidders.length ? getPersonName(l.x_studio_bidders[0], bidderMap) : "") || "No Bidder";
+      else if (groupBy === "enduser") key = l.x_studio_end_user?.[1] || "No End User";
+      else if (groupBy === "sbu") key = l.x_studio_sbu || "No SBU";
       else if (groupBy === "status") key = l.x_studio_lead_status || "No Status";
       else key = l.x_studio_lead_status || "No Status";
       if (!map[key]) map[key] = [];
@@ -1621,21 +1821,26 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
     });
     else keys.sort();
     return keys.map((key, i) => ({ key, leads: map[key], idx: i }));
-  }, [filteredLeads, groupBy, engagementsByLead]);
+  }, [filteredLeads, groupBy, engagementsByLead, bidderMap]);
 
   const groupColor = (key, idx) => {
     if (groupBy === "region") return REGION_COLORS[key] || T.accent;
     if (groupBy === "person") return PERSON_COLORS[idx % PERSON_COLORS.length];
     if (groupBy === "label") return LABEL_GROUP_COLORS[key] || T.accent;
-    if (groupBy === "customer") return PERSON_COLORS[idx % PERSON_COLORS.length];
+    if (groupBy === "bidder") return PERSON_COLORS[idx % PERSON_COLORS.length];
+    if (groupBy === "enduser") return PERSON_COLORS[idx % PERSON_COLORS.length];
+    if (groupBy === "sbu") return PERSON_COLORS[idx % PERSON_COLORS.length];
     if (groupBy === "status") return getPill(key).text;
     return getPill(key).text;
   };
 
   const handleSetViewMode = (mode) => { setViewMode(mode); };
+  const activeFilterCategoryCount = [filterRegion, filterSbu, filterPerson, filterBidder, filterEndUser].filter((arr) => arr.length > 0).length;
   const anyFilter = filterRegion.length > 0
+    || filterSbu.length > 0
     || filterPerson.length > 0
-    || filterCustomer.length > 0
+    || filterBidder.length > 0
+    || filterEndUser.length > 0
     || searchQuery !== ""
     || periodFilter !== defaultPeriod
     || statusFilter !== "ACTIVE";
@@ -1777,40 +1982,57 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
 
       {/* ── Filter bar ── */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", marginBottom: 10, padding: "10px 16px", borderRadius: 12, background: "#ffffff", border: `1px solid ${T.border}` }}>
-        <FilterSelect value={statusFilter} onChange={setStatusFilter} options={statusOptions} width={148} />
-        <FilterSelect value={periodFilter} onChange={setPeriodFilter} options={periodOptions} width={174} />
-        <MultiSelect label="Region" options={regionOptions} selected={filterRegion} onChange={setFilterRegion} />
-        <MultiSelect label="Person" options={personOptions} selected={filterPerson} onChange={setFilterPerson} />
-        <MultiSelect
-          label="Customer"
-          options={customerOptions}
-          selected={filterCustomer}
-          onChange={setFilterCustomer}
-          searchable
-          searchPlaceholder="Search customer..."
-        />
-        <div style={{ width: 1, height: 20, background: "#e5e7eb", flexShrink: 0 }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-          {[["status", "By Lead Status"], ["region", "By Region"], ["person", "By Person"], ["label", "By Label"], ["customer", "By Customer"]].map(([val, lbl]) => (
-            <button
-              key={val}
-              onClick={() => setGroupBy(val)}
+        <FilterSelect value={statusFilter} onChange={setStatusFilter} options={statusOptions} prefix="Status: " width={148} />
+        <FilterSelect value={periodFilter} onChange={setPeriodFilter} options={periodOptions} prefix="Period: " width={174} />
+        <div ref={filterPanelRef} style={{ position: "relative" }}>
+          <button
+            type="button"
+            onClick={() => setShowFilterPanel((v) => !v)}
+            style={{
+              padding: "6px 14px", borderRadius: 999,
+              border: `1px solid ${T.border}`,
+              background: T.bgCard,
+              color: T.accent,
+              fontSize: 12, fontFamily: "inherit", fontWeight: 600,
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+            }}
+          >
+            <span>Filter By{activeFilterCategoryCount > 0 ? ` (${activeFilterCategoryCount})` : ""}</span>
+            <span style={{ fontSize: 10 }}>{showFilterPanel ? "▲" : "▼"}</span>
+          </button>
+          {showFilterPanel && (
+            <div
               style={{
-                background: "none",
-                border: "none",
-                borderBottom: groupBy === val ? `2px solid ${T.accent}` : "2px solid transparent",
-                color: groupBy === val ? T.accent : "#9ca3af",
-                fontSize: 12,
-                fontWeight: 500,
-                padding: "0 0 4px",
-                cursor: "pointer",
-                fontFamily: "inherit",
+                position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 250,
+                background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 10,
+                boxShadow: "0 12px 28px rgba(15, 23, 42, 0.16)", padding: 12,
+                display: "flex", flexDirection: "column", gap: 8, minWidth: 200,
               }}
             >
-              {lbl}
-            </button>
-          ))}
+              <MultiSelect label="Region" options={regionOptions} selected={filterRegion} onChange={setFilterRegion} />
+              <MultiSelect label="SBU" options={sbuOptions} selected={filterSbu} onChange={setFilterSbu} />
+              <MultiSelect label="Person" options={personOptions} selected={filterPerson} onChange={setFilterPerson} />
+              <MultiSelect
+                label="Bidders"
+                options={bidderOptions}
+                selected={filterBidder}
+                onChange={setFilterBidder}
+                searchable
+                searchPlaceholder="Search bidder..."
+              />
+              <MultiSelect
+                label="End User"
+                options={endUserOptions}
+                selected={filterEndUser}
+                onChange={setFilterEndUser}
+                searchable
+                searchPlaceholder="Search end user..."
+              />
+            </div>
+          )}
         </div>
+        <div style={{ width: 1, height: 20, background: "#e5e7eb", flexShrink: 0 }} />
+        <FilterSelect value={groupBy} onChange={setGroupBy} options={groupByOptions} prefix="Group by: " width={190} />
         <div style={{ flex: 1 }} />
         <input
           type="text"
@@ -1840,8 +2062,10 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
               today.setHours(0, 0, 0, 0);
               const range = getPeriodRange(defaultPeriod, today);
               setFilterRegion([]);
+              setFilterSbu([]);
               setFilterPerson([]);
-              setFilterCustomer([]);
+              setFilterBidder([]);
+              setFilterEndUser([]);
               setStatusFilter("ACTIVE");
               setPeriodFilter(defaultPeriod);
               setDateFrom(range ? toDateInput(range.start) : "");
@@ -2044,6 +2268,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {} }) {
                     lead={lead}
                     activity={primaryActivityByLead[lead.id]}
                     userMap={userMap}
+                    bidderMap={bidderMap}
                     onActivityClick={setSelectedActivity}
                     healthHasCompleted={hasCompletedActivity(engagementsByLead[lead.id] || [])}
                     healthHasAnyActivity={hasAnyActivity(engagementsByLead[lead.id] || [])}

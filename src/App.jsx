@@ -47,6 +47,7 @@ export default function App() {
   const [popupDetail, setPopupDetail]       = useState(null);
   const [selectedLead, setSelectedLead]     = useState(null);
   const [userMap, setUserMap]               = useState({});
+  const [bidderMap, setBidderMap]           = useState({});
   const [companies, setCompanies]           = useState([]);
   const [companyId, setCompanyId]           = useState(() => {
     const stored = localStorage.getItem("adage_crm_company_id");
@@ -56,7 +57,9 @@ export default function App() {
   // ── Company list (fetched once, restricted to the companies this dashboard covers,
   //    then further restricted to the companies the signed-in user is allowed to see) ──
   useEffect(() => {
-    const allowedNames = getAllowedCompanyNames(email);
+    // In the dev-mode auth bypass (see main.jsx) there's no signed-in account,
+    // so email is undefined — show every company instead of none.
+    const allowedNames = import.meta.env.DEV && !email ? ALL_COMPANY_NAMES : getAllowedCompanyNames(email);
     fetchOdoo("res.company", "search_read", [[["name","in", ALL_COMPANY_NAMES]]], { fields: ["id","name"], order: "name asc" })
       .then((list) => {
         const fetched = (list || []).filter((c) => allowedNames.includes(c.name));
@@ -103,7 +106,8 @@ export default function App() {
             "x_studio_assigned_salesperson","date_deadline","user_id","x_studio_product_info",
             "x_studio_crm_lead_approval","x_studio_sbu","x_studio_project_details",
             "x_studio_sales_lead","activity_date_deadline","priority","x_studio_project_background",
-            "x_studio_lead_status","x_studio_expected_closing","x_studio_prospect_health"],
+            "x_studio_lead_status","x_studio_expected_closing","x_studio_prospect_health",
+            "x_studio_bidders","x_studio_end_user"],
           limit: 200,
         }),
         fetchOdoo("x_crm_lead_line_163b3", "search_read", [[]], {
@@ -140,7 +144,26 @@ export default function App() {
         } catch (umErr) { console.warn("employeeMap load error:", umErr); }
       }
 
+      // x_studio_bidders is a many2many field — search_read only gives back raw
+      // partner ids, so resolve them to names the same way employee ids are resolved above.
+      const bidderIds = new Set();
+      (leads || []).forEach((lead) => {
+        (Array.isArray(lead.x_studio_bidders) ? lead.x_studio_bidders : []).forEach((p) => {
+          const id = typeof p === "object" && p ? p.id : Array.isArray(p) ? p[0] : Number(p);
+          if (Number.isFinite(id) && id > 0) bidderIds.add(id);
+        });
+      });
+
+      let bidderNameMap = {};
+      if (bidderIds.size > 0) {
+        try {
+          const bidders = await fetchOdoo("res.partner", "search_read", [[["id","in", Array.from(bidderIds)]]], { fields: ["id","name"], limit: 500 });
+          (bidders || []).forEach((partner) => { bidderNameMap[partner.id] = partner.name; });
+        } catch (bidderErr) { console.warn("bidderMap load error:", bidderErr); }
+      }
+
       setUserMap(map);
+      setBidderMap(bidderNameMap);
       setData({ leads: leads || [], engagements: visibleEngagements, stages: stages || [], closedLeads: closedLeads || [] });
     } catch (e) {
       setError(e.message);
@@ -342,12 +365,13 @@ export default function App() {
           <ErrorBoundary key={activeTab}>
             <div className="fade-in">
             {activeTab === "pipeline" && (
-              <PipelineTab leads={leads} stages={data.stages} engagements={engagements} userMap={userMap} />
+              <PipelineTab leads={leads} stages={data.stages} engagements={engagements} userMap={userMap} bidderMap={bidderMap} />
             )}
             {activeTab === "visits" && (
               <VisitsTab
                 leads={leads} engagements={engagements}
                 plannedVisits={plannedVisits} upcomingVisits={upcomingVisits} userMap={userMap}
+                bidderMap={bidderMap}
               />
             )}
             {activeTab === "team" && (

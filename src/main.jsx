@@ -6,7 +6,13 @@ import { SignInPage } from "./components/SignInPage.jsx";
 import { RequireAuth } from "./components/RequireAuth.jsx";
 import { msalConfig } from "./lib/authConfig.js";
 
-if (!msalConfig.auth.clientId || !import.meta.env.VITE_MICROSOFT_TENANT_ID) {
+if (import.meta.env.DEV) {
+  // Local dev only: skip Microsoft sign-in entirely so the dashboard runs
+  // without an Azure app registration configured. import.meta.env.DEV is
+  // false for `vite build`/`vite preview` and on Vercel, so production
+  // still goes through the real MSAL flow below.
+  createRoot(document.getElementById("root")).render(<App />);
+} else if (!msalConfig.auth.clientId || !import.meta.env.VITE_MICROSOFT_TENANT_ID) {
   createRoot(document.getElementById("root")).render(
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", padding: 24, textAlign: "center" }}>
       <div>

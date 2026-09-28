@@ -228,16 +228,18 @@ function MultiSelect({ label, options, selected, onChange, searchable = false, s
 
 
 // ---- Main VisitsTab ----
-export function VisitsTab({ leads, engagements, userMap }) {
+export function VisitsTab({ leads, engagements, userMap, bidderMap = {} }) {
   const [showPreviousVisits, setShowPreviousVisits] = useState(false);
   const [previousRange, setPreviousRange] = useState("last-30-days");
   const [sortOrder, setSortOrder] = useState("date-asc");
 
   // Dropdown filter state (arrays for multi-select)
-  const [filterCompany,  setFilterCompany]  = useState([]);
-  const [filterPerson,   setFilterPerson]   = useState([]);
-  const [filterEngType,  setFilterEngType]  = useState([]);
-  const [filterRegion,   setFilterRegion]   = useState([]);
+  const [filterBidder,       setFilterBidder]       = useState([]);
+  const [filterPerson,       setFilterPerson]       = useState([]);
+  const [filterEngType,      setFilterEngType]      = useState([]);
+  const [filterRegion,       setFilterRegion]       = useState([]);
+  const [filterSbu,          setFilterSbu]          = useState([]);
+  const [filterEndCustomer,  setFilterEndCustomer]  = useState([]);
 
   // Build leadMap once
   const leadMap = useMemo(() => {
@@ -263,6 +265,11 @@ export function VisitsTab({ leads, engagements, userMap }) {
       const effectiveDate = displayDateMeta.date;
       const status = eng.x_studio_engagement_status || "Unknown";
       const personNames = getPersonNames(eng);
+      const bidderNames = (Array.isArray(lead.x_studio_bidders) ? lead.x_studio_bidders : [])
+        .map((p) => getPersonName(p, bidderMap))
+        .filter(Boolean);
+      const sbu = lead.x_studio_sbu || null;
+      const endCustomer = lead.x_studio_end_user?.[1] || null;
       const region = lead.x_studio_responsible_region_1 || null;
       const regionColor = REGION_COLORS[region] || T.textMuted;
       const comparisonDate = parseISODate(effectiveDate);
@@ -277,47 +284,56 @@ export function VisitsTab({ leads, engagements, userMap }) {
         dateISO: displayDateISO,
         comparisonDateISO: effectiveDate,
         personNames,
+        bidderNames,
+        sbu,
+        endCustomer,
         region,
         regionColor,
         isUpcomingVisit,
       });
     });
     return rows;
-  }, [engagements, leadMap, userMap]);
+  }, [engagements, leadMap, userMap, bidderMap]);
 
   // Derive dropdown option lists from all rows
   const dropdownOptions = useMemo(() => {
-    const companies = new Set();
+    const bidders   = new Set();
     const persons   = new Set();
     const engTypes  = new Set();
     const regions   = new Set();
-    allRows.forEach(({ eng, lead, personNames, region }) => {
-      const co = lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1];
-      if (co) companies.add(co);
+    const sbuTypes      = new Set();
+    const endCustomers  = new Set();
+    allRows.forEach(({ eng, lead, personNames, bidderNames, sbu, endCustomer, region }) => {
+      bidderNames.forEach(n => bidders.add(n));
       personNames.forEach(n => persons.add(n));
       if (eng.x_studio_engagement_type) engTypes.add(eng.x_studio_engagement_type);
       if (region) regions.add(region);
+      if (sbu) sbuTypes.add(sbu);
+      if (endCustomer) endCustomers.add(endCustomer);
     });
     return {
-      companies: [...companies].sort(),
-      persons:   [...persons].sort(),
-      engTypes:  [...engTypes].sort(),
-      regions:   [...regions].sort(),
+      bidders:      [...bidders].sort(),
+      persons:      [...persons].sort(),
+      engTypes:     [...engTypes].sort(),
+      regions:      [...regions].sort(),
+      sbuTypes:     [...sbuTypes].sort(),
+      endCustomers: [...endCustomers].sort(),
     };
   }, [allRows]);
 
   // Dropdown filters — OR within each dimension, AND across dimensions
   const matchesDropdowns = (row) => {
-    const { eng, lead, personNames, region } = row;
-    if (filterCompany.length > 0) {
-      const co = lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1] || "";
-      if (!filterCompany.includes(co)) return false;
+    const { eng, personNames, bidderNames, sbu, endCustomer, region } = row;
+    if (filterBidder.length > 0) {
+      if (!bidderNames.some(n => filterBidder.includes(n))) return false;
     }
     if (filterPerson.length > 0) {
       if (!personNames.some(n => filterPerson.includes(n))) return false;
     }
     if (filterEngType.length > 0 && !filterEngType.includes(eng.x_studio_engagement_type)) return false;
     if (filterRegion.length > 0 && !filterRegion.includes(region)) return false;
+    if (filterSbu.length > 0 && !filterSbu.includes(sbu)) return false;
+    if (filterEndCustomer.length > 0 && !filterEndCustomer.includes(endCustomer)) return false;
     return true;
   };
 
@@ -347,7 +363,7 @@ export function VisitsTab({ leads, engagements, userMap }) {
       return 0;
     });
     return rows;
-  }, [allRows, filterCompany, filterPerson, filterEngType, filterRegion, sortOrder, showPreviousVisits, previousRange]); // eslint-disable-line
+  }, [allRows, filterBidder, filterPerson, filterEngType, filterRegion, filterSbu, filterEndCustomer, sortOrder, showPreviousVisits, previousRange]); // eslint-disable-line
 
   // Quick-stats bar
   const typeStats = useMemo(() => {
@@ -359,7 +375,7 @@ export function VisitsTab({ leads, engagements, userMap }) {
     return counts;
   }, [visibleRows]);
 
-  const anyDropdownActive = filterCompany.length > 0 || filterPerson.length > 0 || filterEngType.length > 0 || filterRegion.length > 0;
+  const anyDropdownActive = filterBidder.length > 0 || filterPerson.length > 0 || filterEngType.length > 0 || filterRegion.length > 0 || filterSbu.length > 0 || filterEndCustomer.length > 0;
   const COL_HEADERS = ["Company", "Date", "Order Value", "Region", "Engage. Type", "Assigned To", "Status", "Remarks"];
   const GRID = "1.1fr 132px 100px 112px 146px 160px 120px 1fr";
 
@@ -405,13 +421,15 @@ export function VisitsTab({ leads, engagements, userMap }) {
         >
           View Previous Visits
         </button>
-        <MultiSelect label="Company" options={dropdownOptions.companies} selected={filterCompany} onChange={setFilterCompany} searchable searchPlaceholder="Search company..." />
-        <MultiSelect label="Person" options={dropdownOptions.persons} selected={filterPerson} onChange={setFilterPerson} searchable searchPlaceholder="Search person..." />
-        <MultiSelect label="Type" options={dropdownOptions.engTypes} selected={filterEngType} onChange={setFilterEngType} searchable searchPlaceholder="Search type..." />
+        <MultiSelect label="SBU Type" options={dropdownOptions.sbuTypes} selected={filterSbu} onChange={setFilterSbu} />
+        <MultiSelect label="Bidders" options={dropdownOptions.bidders} selected={filterBidder} onChange={setFilterBidder} searchable searchPlaceholder="Search bidder..." />
+        <MultiSelect label="End Customer" options={dropdownOptions.endCustomers} selected={filterEndCustomer} onChange={setFilterEndCustomer} searchable searchPlaceholder="Search end customer..." />
         <MultiSelect label="Region" options={dropdownOptions.regions} selected={filterRegion} onChange={setFilterRegion} searchable searchPlaceholder="Search region..." />
+        <MultiSelect label="Person" options={dropdownOptions.persons} selected={filterPerson} onChange={setFilterPerson} searchable searchPlaceholder="Search person..." />
+        <MultiSelect label="Engage Type" options={dropdownOptions.engTypes} selected={filterEngType} onChange={setFilterEngType} searchable searchPlaceholder="Search type..." />
         {anyDropdownActive && (
           <button
-            onClick={() => { setFilterCompany([]); setFilterPerson([]); setFilterEngType([]); setFilterRegion([]); }}
+            onClick={() => { setFilterBidder([]); setFilterPerson([]); setFilterEngType([]); setFilterRegion([]); setFilterSbu([]); setFilterEndCustomer([]); }}
             style={{
               padding: "6px 10px",
               borderRadius: 8,
