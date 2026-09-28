@@ -1446,8 +1446,9 @@ function OverallProspectHealthCard({ leads, engagementsByLead }) {
 }
 
 // ─── List row ─────────────────────────────────────────────────────────────────
-const LIST_GRID_COLUMNS = "2fr 140px 120px 110px 100px 130px 110px minmax(190px, 1.25fr)";
 const LIST_HEADER_LABELS = ["Opportunity Name", "Bidders", "Closing & Status", "Expected Value", "Region", "Assigned Salesperson", "Project Type", "Activities"];
+const DEFAULT_LIST_COL_WIDTHS = [320, 140, 120, 110, 100, 130, 110, 220];
+const LIST_COL_WIDTHS_STORAGE_KEY = "adage_crm_pipeline_list_col_widths";
 
 function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, healthHasCompleted, healthHasAnyActivity }) {
   const [hovered, setHovered] = useState(false);
@@ -1460,12 +1461,15 @@ function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, hea
   const closingLabel = formatClosingCellDate(lead.x_studio_expected_closing);
   const projectType = lead.x_studio_project_background || "—";
   const activityAssigned = activity ? getPersonNames(activity.x_studio_action_by, userMap) : "—";
+  const openInOdoo = () => window.open(`${ODOO_BASE_URL}/odoo/crm/${lead.id}`, "_blank", "noopener,noreferrer");
+
   return (
     <div
       className="pipeline-list-row"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ background: hovered ? "#f0fdfd" : "#ffffff" }}
+      onClick={openInOdoo}
+      style={{ background: hovered ? "#f0fdfd" : "#ffffff", cursor: "pointer" }}
     >
       <div className="col-opportunity">
         <div className="opp-title">
@@ -1474,33 +1478,25 @@ function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, hea
         <div className="opp-company">
           {company}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, minWidth: 0 }}>
           <HealthTag
             health={lead.x_studio_prospect_health}
             hasCompleted={healthHasCompleted}
             hasAnyActivity={healthHasAnyActivity}
             expectedClosingISO={lead.x_studio_expected_closing}
+            compact
           />
         </div>
-        <a
-          className="opp-odoo-link"
-          href={`${ODOO_BASE_URL}/odoo/crm/${lead.id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-        >
-          View in Odoo ↗
-        </a>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
         {bidderNames.length > 0
           ? bidderNames.map((name) => (
               <span
                 key={name}
                 title={name}
                 style={{
-                  fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 999,
+                  fontSize: 9.5, fontWeight: 600, padding: "1px 6px", borderRadius: 999,
                   background: "#F1F5F9", color: "#475569",
                   maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}
@@ -1508,11 +1504,11 @@ function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, hea
                 {name}
               </span>
             ))
-          : <span style={{ color: "#d1d5db", fontSize: 13 }}>—</span>}
+          : <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-        <div style={{ fontSize: 12, color: "#374151" }}>{closingLabel}</div>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
+        <div style={{ fontSize: 11.5, color: "#374151" }}>{closingLabel}</div>
         <UrgencyBadge closingDate={lead.x_studio_expected_closing} leadStatus={lead.x_studio_lead_status} />
       </div>
 
@@ -1522,10 +1518,10 @@ function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, hea
 
       <div>
         {lead.x_studio_responsible_region_1
-          ? <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999, background: `${regionColor}18`, color: regionColor }}>
+          ? <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 999, background: `${regionColor}18`, color: regionColor }}>
               {lead.x_studio_responsible_region_1}
             </span>
-          : <span style={{ fontSize: 11, color: "#9ca3af" }}>—</span>}
+          : <span style={{ fontSize: 10, color: "#9ca3af" }}>—</span>}
       </div>
 
       <div className="col-salesperson">
@@ -1534,23 +1530,23 @@ function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, hea
 
       <div>
         {projectType !== "—"
-          ? <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: getProjectTypePill(projectType).bg, color: getProjectTypePill(projectType).color }}>{projectType}</span>
-          : <span style={{ color: "#d1d5db", fontSize: 13 }}>—</span>}
+          ? <span style={{ fontSize: 9.5, fontWeight: 600, padding: "1px 6px", borderRadius: 100, background: getProjectTypePill(projectType).bg, color: getProjectTypePill(projectType).color }}>{projectType}</span>
+          : <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>}
       </div>
 
       <div style={{ display: "flex", justifyContent: "flex-start" }}>
         {activity ? (
           <button
             type="button"
-            onClick={() => onActivityClick(activity)}
+            onClick={(e) => { e.stopPropagation(); onActivityClick(activity); }}
             style={{
               display: "flex",
               flexDirection: "column",
               alignItems: "flex-start",
-              gap: 2,
+              gap: 1,
               width: "100%",
-              padding: "6px 8px",
-              borderRadius: 8,
+              padding: "3px 8px",
+              borderRadius: 6,
               border: `1px solid ${T.border}`,
               background: hovered ? T.accentBg : T.bgCard,
               color: T.textPrimary,
@@ -1559,14 +1555,14 @@ function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, hea
               textAlign: "left",
             }}
           >
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#7C3AED", lineHeight: 1.35 }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: "#7C3AED", lineHeight: 1.25 }}>
               {activity.x_studio_engagement_type || "Activity"}
             </span>
-            <span style={{ fontSize: 11, color: T.textSecondary, lineHeight: 1.4 }}>
+            <span style={{ fontSize: 10.5, color: T.textSecondary, lineHeight: 1.25 }}>
               {activityAssigned}
             </span>
             {activity.x_studio_engagement_with && (
-              <span style={{ fontSize: 10, color: T.textMuted, lineHeight: 1.25 }}>
+              <span style={{ fontSize: 9.5, color: T.textMuted, lineHeight: 1.2 }}>
                 With: {activity.x_studio_engagement_with}
               </span>
             )}
@@ -1594,6 +1590,41 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
   const [filterEndUser, setFilterEndUser] = useState([]);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const filterPanelRef = useRef(null);
+  const [colWidths, setColWidths] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LIST_COL_WIDTHS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === DEFAULT_LIST_COL_WIDTHS.length) return parsed;
+      }
+    } catch { /* ignore malformed/blocked storage */ }
+    return DEFAULT_LIST_COL_WIDTHS;
+  });
+  const listGridRef = useRef(null);
+
+  const startColumnResize = (e, index) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidths = colWidths;
+    const startWidth = startWidths[index];
+    let currentWidths = startWidths;
+    const handleMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      const newWidth = Math.max(50, startWidth + delta);
+      currentWidths = startWidths.map((w, i) => (i === index ? newWidth : w));
+      if (listGridRef.current) {
+        listGridRef.current.style.setProperty("--list-grid-cols", currentWidths.map((w) => `${w}px`).join(" "));
+      }
+    };
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      setColWidths(currentWidths);
+      try { localStorage.setItem(LIST_COL_WIDTHS_STORAGE_KEY, JSON.stringify(currentWidths)); } catch { /* ignore blocked storage */ }
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
   const [dateFrom, setDateFrom] = useState(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1853,79 +1884,145 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
         @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
         .pipeline-list-header {
           display: grid;
-          grid-template-columns: ${LIST_GRID_COLUMNS};
-          padding: 8px 16px;
+          grid-template-columns: var(--list-grid-cols);
+          padding: 5px 16px;
           background: #f8fafc;
           border-bottom: 2px solid #e2e8f0;
           position: sticky;
           top: 0;
           z-index: 10;
         }
+        .pipeline-list-header-cell {
+          position: relative;
+          display: flex;
+          align-items: center;
+          min-width: 0;
+          padding-left: 8px;
+          padding-right: 8px;
+        }
+        .pipeline-list-header-cell span {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
         .pipeline-list-header span {
-          font-size: 10px;
+          font-size: 9.5px;
           font-weight: 700;
           color: #9ca3af;
-          letter-spacing: 0.8px;
+          letter-spacing: 0.6px;
           text-transform: uppercase;
+        }
+        .col-resize-handle {
+          position: absolute;
+          top: 0;
+          right: -8px;
+          width: 16px;
+          height: 100%;
+          cursor: col-resize;
+          z-index: 5;
+        }
+        .col-resize-handle::after {
+          content: "";
+          position: absolute;
+          top: 15%;
+          bottom: 15%;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 3px;
+          border-radius: 3px;
+          background: #02818A;
+          opacity: 0.55;
+        }
+        .col-resize-handle:hover::after,
+        .col-resize-handle:active::after {
+          top: 8%;
+          bottom: 8%;
+          width: 4px;
+          opacity: 1;
+        }
+        .col-resize-handle:hover,
+        .col-resize-handle:active {
+          background: rgba(2, 129, 138, 0.12);
+        }
+        .col-resize-hint {
+          position: absolute;
+          top: 50%;
+          right: 12px;
+          transform: translateY(-50%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          border: 1px solid #cbd5e1;
+          color: #9ca3af;
+          font-size: 9px;
+          font-weight: 700;
+          font-family: inherit;
+          cursor: help;
+          z-index: 6;
+          flex-shrink: 0;
+        }
+        .col-resize-hint:hover {
+          border-color: #02818A;
+          color: #02818A;
         }
         .pipeline-list-row {
           display: grid;
-          grid-template-columns: ${LIST_GRID_COLUMNS};
-          padding: 10px 16px;
+          grid-template-columns: var(--list-grid-cols);
+          padding: 4px 16px;
           border-bottom: 1px solid #f1f5f9;
           background: white;
-          align-items: start;
+          align-items: center;
           transition: background 0.15s;
-          min-height: 52px;
+          min-height: 34px;
+        }
+        .pipeline-list-row > div {
+          border-right: 1px solid #f1f5f9;
+          padding-right: 8px;
+          padding-left: 8px;
+          min-width: 0;
+        }
+        .pipeline-list-row > div:first-child {
+          padding-left: 0;
+        }
+        .pipeline-list-row > div:last-child {
+          border-right: none;
+          padding-right: 0;
         }
         .col-opportunity {
           display: flex;
           flex-direction: column;
-          gap: 2px;
+          gap: 1px;
           padding-right: 12px;
           min-width: 0;
         }
         .opp-title {
-          font-size: 13px;
+          font-size: 12.5px;
           font-weight: 600;
           color: #1e293b;
-          line-height: 1.4;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
+          line-height: 1.3;
+          white-space: nowrap;
           overflow: hidden;
+          text-overflow: ellipsis;
         }
         .opp-company {
-          font-size: 11px;
+          font-size: 10.5px;
           color: #94a3b8;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        .opp-odoo-link {
-          font-size: 11px;
-          color: #02818A;
-          text-decoration: none;
-          opacity: 0;
-          transition: opacity 0.15s;
-          font-weight: 700;
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          margin-top: 4px;
-        }
-        .pipeline-list-row:hover .opp-odoo-link {
-          opacity: 1;
-        }
         .col-value {
-          font-size: 13px;
+          font-size: 12.5px;
           font-weight: 700;
           color: #02818A;
           text-align: right;
           padding-right: 8px;
         }
         .col-salesperson {
-          font-size: 12px;
+          font-size: 11.5px;
           color: #374151;
           font-weight: 500;
           line-height: 1.4;
@@ -2230,6 +2327,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
       )}
 
       {/* ── Grouped content ── */}
+      <div ref={listGridRef} style={{ "--list-grid-cols": colWidths.map((w) => `${w}px`).join(" ") }}>
       {groups.map(({ key, leads: groupLeads, idx }) => {
         const groupRev = groupLeads.reduce((s, l) => s + (l.expected_revenue || 0), 0);
         const isExpanded = !!expandedGroups[key];
@@ -2256,11 +2354,24 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
             </div>
 
             {viewMode === "list" && isExpanded && (
-              <div style={{ border: `1px solid ${T.border}`, borderTop: "none", borderRadius: "0 0 10px 10px", overflow: "hidden" }}>
+              <div style={{ border: `1px solid ${T.border}`, borderTop: "none", borderRadius: "0 0 10px 10px", overflowX: "auto", overflowY: "visible" }}>
                 <div className="pipeline-list-header">
-                  {LIST_HEADER_LABELS.map((label) => (
-                    <span key={label}>{label}</span>
+                  {LIST_HEADER_LABELS.map((label, colIdx) => (
+                    <div key={label} className="pipeline-list-header-cell">
+                      <span>{label}</span>
+                      <div
+                        className="col-resize-handle"
+                        onMouseDown={(e) => startColumnResize(e, colIdx)}
+                        title="Drag to resize this column"
+                      />
+                    </div>
                   ))}
+                  <span
+                    className="col-resize-hint"
+                    title="Columns are resizable — drag the thin divider between any two column headers. Your widths are saved automatically."
+                  >
+                    ?
+                  </span>
                 </div>
                 {groupLeads.map(lead => (
                   <ListRow
@@ -2289,6 +2400,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
           </div>
         );
       })}
+      </div>
 
       {groups.length === 0 && (
         <div style={{ textAlign: "center", padding: "48px 0", color: T.textMuted, fontSize: 13 }}>No leads match the current filters.</div>

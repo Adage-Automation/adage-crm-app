@@ -157,8 +157,8 @@ export default function App() {
       let bidderNameMap = {};
       if (bidderIds.size > 0) {
         try {
-          const bidders = await fetchOdoo("res.partner", "search_read", [[["id","in", Array.from(bidderIds)]]], { fields: ["id","name"], limit: 500 });
-          (bidders || []).forEach((partner) => { bidderNameMap[partner.id] = partner.name; });
+          const bidders = await fetchOdoo("res.partner", "search_read", [[["id","in", Array.from(bidderIds)]]], { fields: ["id","complete_name"], limit: 500 });
+          (bidders || []).forEach((partner) => { bidderNameMap[partner.id] = partner.complete_name || partner.name; });
         } catch (bidderErr) { console.warn("bidderMap load error:", bidderErr); }
       }
 

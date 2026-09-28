@@ -444,7 +444,7 @@ function getHealthTagReasonTooltip({ health, expectedClosingISO, hasCompleted, h
   return "Review expected closing date and activity to understand the current health tag.";
 }
 
-export default function HealthTag({ health, hasCompleted, hasAnyActivity: hasAnyActivityFlag, expectedClosingISO }) {
+export default function HealthTag({ health, hasCompleted, hasAnyActivity: hasAnyActivityFlag, expectedClosingISO, compact = false }) {
   const [showInfo, setShowInfo] = useState(false);
   const [hoveringInfo, setHoveringInfo] = useState(false);
   const infoRef = useRef(null);
@@ -476,32 +476,36 @@ export default function HealthTag({ health, hasCompleted, hasAnyActivity: hasAny
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 5,
+        gap: compact ? 3 : 5,
         maxWidth: "100%",
       }}
     >
       <span
+        title={compact ? meta.text : undefined}
         style={{
           display: "inline-flex",
           alignItems: "center",
           minWidth: 0,
           maxWidth: "100%",
-          padding: "3px 9px",
+          padding: compact ? "1.5px 7px" : "3px 9px",
           borderRadius: 999,
           border: `1px solid ${meta.border}`,
           background: meta.bg,
           color: meta.textColor,
-          fontSize: 10,
+          fontSize: compact ? 9.5 : 10,
           fontWeight: 700,
-          lineHeight: 1.25,
-          whiteSpace: "normal",
-          overflowWrap: "anywhere",
+          lineHeight: compact ? 1.2 : 1.25,
+          whiteSpace: compact ? "nowrap" : "normal",
+          overflow: compact ? "hidden" : "visible",
+          textOverflow: compact ? "ellipsis" : "clip",
+          overflowWrap: compact ? "normal" : "anywhere",
         }}
       >
         {meta.text}
       </span>
       <span
         ref={infoRef}
+        onClick={(e) => e.stopPropagation()}
         onMouseEnter={() => {
           setHoveringInfo(true);
           setShowInfo(true);
@@ -522,14 +526,14 @@ export default function HealthTag({ health, hasCompleted, hasAnyActivity: hasAny
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 14,
-            height: 14,
+            width: compact ? 11 : 14,
+            height: compact ? 11 : 14,
             padding: 0,
             margin: 0,
             borderRadius: "50%",
             border: `1px solid ${hoveringInfo || showInfo ? T.accent : T.textMuted}`,
             background: "none",
-            fontSize: 9,
+            fontSize: compact ? 8 : 9,
             fontWeight: 700,
             lineHeight: 1,
             fontFamily: "inherit",

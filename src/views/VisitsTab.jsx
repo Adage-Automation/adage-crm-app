@@ -42,6 +42,10 @@ const toStartOfDay = (date) => {
   return next;
 };
 
+const COL_HEADERS = ["End User", "Date", "Order Value", "Region", "Engage. Type", "Assigned To", "Status", "Remarks"];
+const DEFAULT_VISITS_COL_WIDTHS = [240, 132, 100, 112, 146, 160, 120, 260];
+const VISITS_COL_WIDTHS_STORAGE_KEY = "adage_crm_visits_list_col_widths";
+
 const PREVIOUS_RANGE_OPTIONS = [
   { value: "last-week", label: "Last Week", days: 7 },
   { value: "last-30-days", label: "Last 30 Days", days: 30 },
@@ -241,6 +245,42 @@ export function VisitsTab({ leads, engagements, userMap, bidderMap = {} }) {
   const [filterSbu,          setFilterSbu]          = useState([]);
   const [filterEndCustomer,  setFilterEndCustomer]  = useState([]);
 
+  const [colWidths, setColWidths] = useState(() => {
+    try {
+      const saved = localStorage.getItem(VISITS_COL_WIDTHS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === DEFAULT_VISITS_COL_WIDTHS.length) return parsed;
+      }
+    } catch { /* ignore malformed/blocked storage */ }
+    return DEFAULT_VISITS_COL_WIDTHS;
+  });
+  const listGridRef = useRef(null);
+
+  const startColumnResize = (e, index) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidths = colWidths;
+    const startWidth = startWidths[index];
+    let currentWidths = startWidths;
+    const handleMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      const newWidth = Math.max(50, startWidth + delta);
+      currentWidths = startWidths.map((w, i) => (i === index ? newWidth : w));
+      if (listGridRef.current) {
+        listGridRef.current.style.setProperty("--visit-grid-cols", currentWidths.map((w) => `${w}px`).join(" "));
+      }
+    };
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      setColWidths(currentWidths);
+      try { localStorage.setItem(VISITS_COL_WIDTHS_STORAGE_KEY, JSON.stringify(currentWidths)); } catch { /* ignore blocked storage */ }
+    };
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
   // Build leadMap once
   const leadMap = useMemo(() => {
     const m = {};
@@ -376,27 +416,117 @@ export function VisitsTab({ leads, engagements, userMap, bidderMap = {} }) {
   }, [visibleRows]);
 
   const anyDropdownActive = filterBidder.length > 0 || filterPerson.length > 0 || filterEngType.length > 0 || filterRegion.length > 0 || filterSbu.length > 0 || filterEndCustomer.length > 0;
-  const COL_HEADERS = ["Company", "Date", "Order Value", "Region", "Engage. Type", "Assigned To", "Status", "Remarks"];
-  const GRID = "1.1fr 132px 100px 112px 146px 160px 120px 1fr";
 
   return (
     <div>
       <style>{`
         @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
-        .visit-odoo-link {
-          font-size: 11px;
-          color: #02818A;
-          text-decoration: none;
-          opacity: 0;
-          transition: opacity 0.15s;
-          font-weight: 700;
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          margin-top: 4px;
+        .visit-list-header {
+          display: grid;
+          grid-template-columns: var(--visit-grid-cols);
+          padding: 5px 16px;
+          gap: 8px;
+          background: ${T.bgCardAlt};
+          border-bottom: 2px solid ${T.border};
+          position: sticky;
+          top: 0;
+          z-index: 2;
         }
-        .visit-row:hover .visit-odoo-link {
+        .visit-list-header-cell {
+          position: relative;
+          display: flex;
+          align-items: center;
+          min-width: 0;
+        }
+        .visit-list-header-cell span {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: 9.5px;
+          color: ${T.textMuted};
+          font-weight: 700;
+          letter-spacing: 0.6px;
+          text-transform: uppercase;
+        }
+        .visit-col-resize-handle {
+          position: absolute;
+          top: 0;
+          right: -8px;
+          width: 16px;
+          height: 100%;
+          cursor: col-resize;
+          z-index: 5;
+        }
+        .visit-col-resize-handle::after {
+          content: "";
+          position: absolute;
+          top: 15%;
+          bottom: 15%;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 3px;
+          border-radius: 3px;
+          background: #02818A;
+          opacity: 0.55;
+        }
+        .visit-col-resize-handle:hover::after,
+        .visit-col-resize-handle:active::after {
+          top: 8%;
+          bottom: 8%;
+          width: 4px;
           opacity: 1;
+        }
+        .visit-col-resize-handle:hover,
+        .visit-col-resize-handle:active {
+          background: rgba(2, 129, 138, 0.12);
+        }
+        .visit-col-resize-hint {
+          position: absolute;
+          top: 50%;
+          right: 12px;
+          transform: translateY(-50%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          border: 1px solid #cbd5e1;
+          color: #9ca3af;
+          font-size: 9px;
+          font-weight: 700;
+          font-family: inherit;
+          cursor: help;
+          z-index: 6;
+          flex-shrink: 0;
+        }
+        .visit-col-resize-hint:hover {
+          border-color: #02818A;
+          color: #02818A;
+        }
+        .visit-row {
+          display: grid;
+          grid-template-columns: var(--visit-grid-cols);
+          gap: 8px;
+          padding: 4px 16px;
+          align-items: center;
+          border-bottom: 1px solid ${T.border};
+          transition: background 0.15s;
+          min-height: 34px;
+          cursor: pointer;
+        }
+        .visit-row > div {
+          border-right: 1px solid #f1f5f9;
+          padding-right: 8px;
+          padding-left: 8px;
+          min-width: 0;
+        }
+        .visit-row > div:first-child {
+          padding-left: 0;
+        }
+        .visit-row > div:last-child {
+          border-right: none;
+          padding-right: 0;
         }
       `}</style>
 
@@ -506,18 +636,29 @@ export function VisitsTab({ leads, engagements, userMap, bidderMap = {} }) {
 
       {/* -- Table -- */}
       <div className="card" style={{ overflow: "hidden" }}>
-        <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "60vh" }}>
+        <div
+          ref={listGridRef}
+          style={{ overflowX: "auto", overflowY: "auto", maxHeight: "60vh", "--visit-grid-cols": colWidths.map((w) => `${w}px`).join(" ") }}
+        >
           <div style={{ minWidth: 900 }}>
             {/* Sticky header */}
-            <div style={{
-              display: "grid", gridTemplateColumns: GRID,
-              padding: "8px 16px", gap: 8,
-              background: T.bgCardAlt, borderBottom: `1px solid ${T.border}`,
-              position: "sticky", top: 0, zIndex: 2,
-            }}>
-              {COL_HEADERS.map(h => (
-                <div key={h} style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>{h}</div>
+            <div className="visit-list-header">
+              {COL_HEADERS.map((h, colIdx) => (
+                <div key={h} className="visit-list-header-cell">
+                  <span>{h}</span>
+                  <div
+                    className="visit-col-resize-handle"
+                    onMouseDown={(e) => startColumnResize(e, colIdx)}
+                    title="Drag to resize this column"
+                  />
+                </div>
               ))}
+              <span
+                className="visit-col-resize-hint"
+                title="Columns are resizable — drag the thin divider between any two column headers. Your widths are saved automatically."
+              >
+                ?
+              </span>
             </div>
 
             {/* Empty state */}
@@ -545,7 +686,6 @@ export function VisitsTab({ leads, engagements, userMap, bidderMap = {} }) {
                   personNames={personNames}
                   region={region}
                   regionColor={regionColor}
-                  GRID={GRID}
                 />
               );
             })}
@@ -557,66 +697,55 @@ export function VisitsTab({ leads, engagements, userMap, bidderMap = {} }) {
 }
 
 // --- Single visit row (own component for hover state) ---
-function VisitRow({ eng, lead, dateISO, status, cfg, isAnomaly, personNames, region, regionColor, GRID }) {
+function VisitRow({ eng, lead, dateISO, status, cfg, isAnomaly, personNames, region, regionColor }) {
   const [hovered, setHovered] = useState(false);
+  const openInOdoo = () => window.open(`${ODOO_BASE_URL}/odoo/crm/${lead.id}`, "_blank", "noopener,noreferrer");
 
   return (
     <div
       className="visit-row"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={openInOdoo}
       style={{
-        display: "grid", gridTemplateColumns: GRID, gap: 8,
-        padding: "10px 16px", alignItems: "center",
-        borderBottom: `1px solid ${T.border}`,
         background: hovered ? T.bgCardAlt : "transparent",
-        transition: "background 0.15s",
       }}
     >
-      {/* Company */}
+      {/* End User */}
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 12, color: T.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1] || "—"}
+        <div style={{ fontSize: 11.5, color: T.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {lead?.x_studio_end_user?.[1] || "—"}
         </div>
-        <a
-          className="visit-odoo-link"
-          href={`${ODOO_BASE_URL}/odoo/crm/${lead.id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(event) => event.stopPropagation()}
-        >
-          View in Odoo ↗
-        </a>
       </div>
 
       {/* Date */}
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: T.textPrimary, whiteSpace: "nowrap" }}>
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: T.textPrimary, whiteSpace: "nowrap" }}>
           {dateISO ? fmtShort(dateISO) : "—"}
         </div>
       </div>
 
       {/* Order Value */}
-      <div style={{ fontSize: 12, fontWeight: 700, color: lead?.expected_revenue > 0 ? T.success : T.textMuted }}>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: lead?.expected_revenue > 0 ? T.success : T.textMuted }}>
         {lead?.expected_revenue > 0 ? fmt(lead.expected_revenue) : "—"}
       </div>
 
       {/* Region */}
       <div>
         {region ? (
-          <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: `${regionColor}18`, color: regionColor }}>
+          <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 999, background: `${regionColor}18`, color: regionColor }}>
             {region}
           </span>
-        ) : <span style={{ fontSize: 11, color: T.textMuted }}>—</span>}
+        ) : <span style={{ fontSize: 10, color: T.textMuted }}>—</span>}
       </div>
 
       {/* Engagement Type */}
       <div>
-        <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 100, background: "rgba(124,58,237,0.10)", color: "#7C3AED" }}>
+        <span style={{ fontSize: 9.5, fontWeight: 600, padding: "1px 6px", borderRadius: 999, background: "rgba(124,58,237,0.10)", color: "#7C3AED" }}>
           {getEmoji(eng.x_studio_engagement_type)} {eng.x_studio_engagement_type || "—"}
         </span>
         {eng.x_studio_engagement_with && (
-          <div style={{ marginTop: 4, fontSize: 10, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ marginTop: 2, fontSize: 9.5, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             With: {eng.x_studio_engagement_with}
           </div>
         )}
@@ -625,13 +754,13 @@ function VisitRow({ eng, lead, dateISO, status, cfg, isAnomaly, personNames, reg
       {/* Assigned To */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 3, alignItems: "center" }}>
         {personNames.length > 0 ? personNames.map((n, i) => (
-          <span key={n} style={{ fontSize: 11, color: T.textSecondary }}>{n}{i < personNames.length - 1 ? "," : ""}</span>
-        )) : <span style={{ fontSize: 11, color: T.textMuted }}>—</span>}
+          <span key={n} style={{ fontSize: 10.5, color: T.textSecondary }}>{n}{i < personNames.length - 1 ? "," : ""}</span>
+        )) : <span style={{ fontSize: 10.5, color: T.textMuted }}>—</span>}
       </div>
 
       {/* Status */}
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: cfg.bg, color: cfg.text, textDecoration: status === "Cancelled" ? "line-through" : "none" }}>
+        <span style={{ fontSize: 9.5, fontWeight: 600, padding: "1px 6px", borderRadius: 999, background: cfg.bg, color: cfg.text, textDecoration: status === "Cancelled" ? "line-through" : "none" }}>
           {status}
         </span>
         {isAnomaly && (
@@ -643,14 +772,12 @@ function VisitRow({ eng, lead, dateISO, status, cfg, isAnomaly, personNames, reg
       <div
         title={eng.x_studio_remarkscomments || ""}
         style={{
-          fontSize: 11,
+          fontSize: 10.5,
           color: eng.x_studio_remarkscomments ? T.textSecondary : T.textMuted,
-          lineHeight: 1.4,
+          lineHeight: 1.3,
           overflow: "hidden",
-          display: "-webkit-box",
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: "vertical",
-          wordBreak: "break-word",
+          whiteSpace: "nowrap",
+          textOverflow: "ellipsis",
         }}
       >
         {eng.x_studio_remarkscomments || "—"}
