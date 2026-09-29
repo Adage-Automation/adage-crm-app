@@ -76,10 +76,10 @@ const getActiveHorizonLabel = (expectedClosingISO) => {
   today.setHours(0, 0, 0, 0);
 
   const d = parseISODate(expectedClosingISO);
-  if (!d) return "Unclosed Active Prospects";
+  if (!d) return "Upcoming Prospects";
   d.setHours(0, 0, 0, 0);
 
-  if (d < today) return "Unclosed Active Prospects";
+  if (d < today) return "Upcoming Prospects";
 
   const currentYear = today.getFullYear();
   const nextYear = currentYear + 1;
@@ -100,7 +100,7 @@ const getActiveHorizonLabel = (expectedClosingISO) => {
     return "Next Year";
   }
 
-  return "Unclosed Active Prospects";
+  return "Upcoming Prospects";
 };
 
 const getActiveBucketKey = (lead) => `ACTIVE • ${getActiveHorizonLabel(lead?.x_studio_expected_closing)}`;
@@ -995,7 +995,7 @@ function RevenueDonut({ leads, onSegmentClick, activeKey, breakdownEnabled }) {
       "ACTIVE • This Quarter (Jul-Sep)": "#D97706",
       "ACTIVE • Next Quarter (Oct-Dec)": "#02818A",
       "ACTIVE • Next Year": "#7C3AED",
-      "ACTIVE • Unclosed Active Prospects": "#DC2626",
+      "ACTIVE • Upcoming Prospects": "#16A34A",
     };
     const color = s === "ACTIVE" && breakdownEnabled
       ? (activeBucketColors[key] || "#EA9400")
@@ -1426,9 +1426,12 @@ function OverallProspectHealthCard({ leads, engagementsByLead }) {
 }
 
 // ─── List row ─────────────────────────────────────────────────────────────────
-const LIST_HEADER_LABELS = ["Opportunity Health", "Opportunity Name", "Bidders", "End User", "SBU Type", "Closing Date", "Status", "Expected Value", "Category", "Category Scaled Value", "Region", "Assigned Salesperson", "Project Type", "Activities"];
-const DEFAULT_LIST_COL_WIDTHS = [72, 320, 180, 220, 110, 110, 110, 110, 80, 130, 100, 130, 110, 220];
-const LIST_COL_WIDTHS_STORAGE_KEY = "adage_crm_pipeline_list_col_widths";
+const LIST_HEADER_LABELS = ["Opportunity Name", "Bidders", "SBU Type", "Closing Date", "Status", "Expected Value", "Category", "Category Scaled Value", "Region", "Assigned Salesperson", "Project Type", "Activities"];
+// Relative column weights (fr), so the table stretches/shrinks with the window; MIN_COL_PX is the floor.
+const DEFAULT_LIST_COL_WIDTHS = [26, 14, 8, 8, 8, 9, 6, 9, 8, 10, 9, 16];
+const LIST_COL_WIDTHS_STORAGE_KEY = "adage_crm_pipeline_list_col_weights_v2";
+const MIN_COL_PX = 60;
+const listGridTemplate = (weights) => weights.map((w) => `minmax(${MIN_COL_PX}px, ${w}fr)`).join(" ");
 
 // Cat A = full expected value, Cat B = half; anything else has no scaled value.
 const getScaledRevenue = (lead) => {
@@ -1459,13 +1462,12 @@ function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, hea
       onClick={openInOdoo}
       style={{ background: hovered ? "#f0fdfd" : "#ffffff", cursor: "pointer" }}
     >
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-        <HealthSpeedometer value={lead.x_studio_prospect_health} size={56} fallbackLabel={lead.x_studio_prospect_health || "Not yet scored"} />
-      </div>
-
       <div className="col-opportunity">
         <div className="opp-title">
           {lead.name}
+        </div>
+        <div className="opp-company">
+          {company}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, minWidth: 0 }}>
           <HealthTag
@@ -1487,27 +1489,12 @@ function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, hea
                 style={{
                   fontSize: 9.5, fontWeight: 600, padding: "1px 6px", borderRadius: 999,
                   background: "#F1F5F9", color: "#475569",
-                  maxWidth: 170, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}
               >
                 {name}
               </span>
             ))
-          : <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>}
-      </div>
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-        {company !== "—"
-          ? <span
-              title={company}
-              style={{
-                fontSize: 9.5, fontWeight: 600, padding: "1px 6px", borderRadius: 999,
-                background: "#F1F5F9", color: "#475569",
-                maxWidth: 210, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}
-            >
-              {company}
-            </span>
           : <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>}
       </div>
 
@@ -1620,13 +1607,16 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
     const startX = e.clientX;
     const startWidths = colWidths;
     const startWidth = startWidths[index];
+    // weight units per pixel, so dragging tracks the cursor at the current window width
+    const header = e.currentTarget.closest(".pipeline-list-header");
+    const weightPerPx = startWidths.reduce((a, b) => a + b, 0) / Math.max(1, (header?.clientWidth || 1200) - 32);
     let currentWidths = startWidths;
     const handleMouseMove = (moveEvent) => {
       const delta = moveEvent.clientX - startX;
-      const newWidth = Math.max(50, startWidth + delta);
+      const newWidth = Math.max(MIN_COL_PX * weightPerPx, startWidth + delta * weightPerPx);
       currentWidths = startWidths.map((w, i) => (i === index ? newWidth : w));
       if (listGridRef.current) {
-        listGridRef.current.style.setProperty("--list-grid-cols", currentWidths.map((w) => `${w}px`).join(" "));
+        listGridRef.current.style.setProperty("--list-grid-cols", listGridTemplate(currentWidths));
       }
     };
     const handleMouseUp = () => {
@@ -1900,18 +1890,17 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
       // Sheet 1: exactly the rows shown in the list view, in the same group order.
       const ws = wb.addWorksheet("Pipeline");
       const cols = [
-        ["Odoo Link", 14], ["Group", 24], ["Opportunity Health Score (0-100)", 16], ["Opportunity Name", 44], ["Bidders", 34], ["End User", 34],
+        ["Odoo Link", 14], ["Group", 24], ["Opportunity Label", 38], ["Opportunity Name", 44], ["Bidders", 34], ["End User", 34],
         ["SBU Type", 16], ["Closing Date", 14], ["Status", 12], ["Expected Value", 16], ["Currency", 10], ["Category", 10],
         ["Category Scaled Value", 18], ["Region", 14], ["Assigned Salesperson", 24], ["Project Type", 18], ["Activity", 30],
       ];
       ws.columns = cols.map(([header, width]) => ({ header, width }));
       groups.forEach(({ key, leads: groupLeads }) => groupLeads.forEach((l) => {
         const activity = primaryActivityByLead[l.id];
-        const health = HEALTH_POSITIONS[l.x_studio_prospect_health];
         const row = ws.addRow([
           { text: "Open in Odoo", hyperlink: `${ODOO_BASE_URL}/odoo/crm/${l.id}` },
           key,
-          health == null ? "" : Math.round(health),
+          getLeadLabelMeta(l, engagementsByLead).text || "Not yet scored",
           l.name,
           (Array.isArray(l.x_studio_bidders) ? l.x_studio_bidders : []).map((p) => getPersonName(p, bidderMap)).filter(Boolean).join(", "),
           l.partner_id?.[1] || l.partner_name || l.x_studio_end_user?.[1] || "",
@@ -1994,7 +1983,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
         .pipeline-list-header-cell span {
           overflow: hidden;
           text-overflow: ellipsis;
-          white-space: nowrap;
+          line-height: 1.2;
         }
         .pipeline-list-header span {
           font-size: 9.5px;
@@ -2070,6 +2059,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
           min-height: 34px;
         }
         .pipeline-list-row > div {
+          text-align: left;
           border-right: 1px solid #f1f5f9;
           padding-right: 8px;
           padding-left: 8px;
@@ -2109,8 +2099,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
           font-size: 12.5px;
           font-weight: 700;
           color: #02818A;
-          text-align: right;
-          padding-right: 8px;
+          text-align: left;
         }
         .col-salesperson {
           font-size: 11.5px;
@@ -2426,7 +2415,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
       )}
 
       {/* ── Grouped content ── */}
-      <div ref={listGridRef} style={{ "--list-grid-cols": colWidths.map((w) => `${w}px`).join(" ") }}>
+      <div ref={listGridRef} style={{ "--list-grid-cols": listGridTemplate(colWidths) }}>
       {groups.map(({ key, leads: groupLeads, idx }) => {
         const groupRev = groupLeads.reduce((s, l) => s + (l.expected_revenue || 0), 0);
         const isExpanded = !!expandedGroups[key];
@@ -2458,6 +2447,14 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
                   {LIST_HEADER_LABELS.map((label, colIdx) => (
                     <div key={label} className="pipeline-list-header-cell">
                       <span>{label}</span>
+                      {label === "Category Scaled Value" && (
+                        <span
+                          title={"Cat A: same as Expected Value\nCat B: half (50%) of Expected Value\nLeads with no category: shown as —"}
+                          style={{ flexShrink: 0, marginLeft: 4, width: 13, height: 13, borderRadius: "50%", border: "1px solid #9ca3af", color: "#9ca3af", fontSize: 9, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "help", letterSpacing: 0, textTransform: "none" }}
+                        >
+                          ?
+                        </span>
+                      )}
                       <div
                         className="col-resize-handle"
                         onMouseDown={(e) => startColumnResize(e, colIdx)}
