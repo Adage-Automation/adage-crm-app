@@ -107,7 +107,7 @@ export default function App() {
             "x_studio_crm_lead_approval","x_studio_sbu","x_studio_project_details",
             "x_studio_sales_lead","activity_date_deadline","priority","x_studio_project_background",
             "x_studio_lead_status","x_studio_expected_closing","x_studio_prospect_health",
-            "x_studio_bidders","x_studio_end_user"],
+            "x_studio_bidders","x_studio_end_user","x_studio_category"],
           limit: 200,
         }),
         fetchOdoo("x_crm_lead_line_163b3", "search_read", [[]], {

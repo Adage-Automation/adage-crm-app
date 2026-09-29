@@ -1426,9 +1426,16 @@ function OverallProspectHealthCard({ leads, engagementsByLead }) {
 }
 
 // ─── List row ─────────────────────────────────────────────────────────────────
-const LIST_HEADER_LABELS = ["Opportunity Name", "Bidders", "Closing & Status", "Expected Value", "Region", "Assigned Salesperson", "Project Type", "Activities"];
-const DEFAULT_LIST_COL_WIDTHS = [320, 140, 120, 110, 100, 130, 110, 220];
+const LIST_HEADER_LABELS = ["Opportunity Health", "Opportunity Name", "Bidders", "End User", "SBU Type", "Closing Date", "Status", "Expected Value", "Category", "Category Scaled Value", "Region", "Assigned Salesperson", "Project Type", "Activities"];
+const DEFAULT_LIST_COL_WIDTHS = [72, 320, 180, 220, 110, 110, 110, 110, 80, 130, 100, 130, 110, 220];
 const LIST_COL_WIDTHS_STORAGE_KEY = "adage_crm_pipeline_list_col_widths";
+
+// Cat A = full expected value, Cat B = half; anything else has no scaled value.
+const getScaledRevenue = (lead) => {
+  const category = String(lead.x_studio_category || "").toUpperCase();
+  const revenue = lead.expected_revenue || 0;
+  return /\bB$/.test(category) ? revenue / 2 : /\bA$/.test(category) ? revenue : 0;
+};
 
 function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, healthHasCompleted, healthHasAnyActivity }) {
   const [hovered, setHovered] = useState(false);
@@ -1440,6 +1447,7 @@ function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, hea
     .filter(Boolean);
   const closingLabel = formatClosingCellDate(lead.x_studio_expected_closing);
   const projectType = lead.x_studio_project_background || "—";
+  const scaledRevenue = getScaledRevenue(lead);
   const activityAssigned = activity ? getPersonNames(activity.x_studio_action_by, userMap) : "—";
   const openInOdoo = () => window.open(`${ODOO_BASE_URL}/odoo/crm/${lead.id}`, "_blank", "noopener,noreferrer");
 
@@ -1451,12 +1459,13 @@ function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, hea
       onClick={openInOdoo}
       style={{ background: hovered ? "#f0fdfd" : "#ffffff", cursor: "pointer" }}
     >
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+        <HealthSpeedometer value={lead.x_studio_prospect_health} size={56} fallbackLabel={lead.x_studio_prospect_health || "Not yet scored"} />
+      </div>
+
       <div className="col-opportunity">
         <div className="opp-title">
           {lead.name}
-        </div>
-        <div className="opp-company">
-          {company}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, minWidth: 0 }}>
           <HealthTag
@@ -1478,7 +1487,7 @@ function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, hea
                 style={{
                   fontSize: 9.5, fontWeight: 600, padding: "1px 6px", borderRadius: 999,
                   background: "#F1F5F9", color: "#475569",
-                  maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  maxWidth: 170, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}
               >
                 {name}
@@ -1487,13 +1496,37 @@ function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, hea
           : <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
-        <div style={{ fontSize: 11.5, color: "#374151" }}>{closingLabel}</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+        {company !== "—"
+          ? <span
+              title={company}
+              style={{
+                fontSize: 9.5, fontWeight: 600, padding: "1px 6px", borderRadius: 999,
+                background: "#F1F5F9", color: "#475569",
+                maxWidth: 210, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}
+            >
+              {company}
+            </span>
+          : <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>}
+      </div>
+
+      <div style={{ fontSize: 11.5, color: "#374151" }}>{lead.x_studio_sbu || "—"}</div>
+
+      <div style={{ fontSize: 11.5, color: "#374151" }}>{closingLabel}</div>
+
+      <div>
         <UrgencyBadge closingDate={lead.x_studio_expected_closing} leadStatus={lead.x_studio_lead_status} />
       </div>
 
       <div className="col-value">
           {lead.expected_revenue > 0 ? fmtByCurrency(lead.expected_revenue, lead.x_studio_currency || "INR") : "—"}
+      </div>
+
+      <div style={{ fontSize: 11.5, color: "#374151" }}>{lead.x_studio_category || "—"}</div>
+
+      <div className="col-value">
+        {scaledRevenue > 0 ? fmtByCurrency(scaledRevenue, lead.x_studio_currency || "INR") : "—"}
       </div>
 
       <div>
@@ -1856,6 +1889,86 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
 
   const breakdownEnabled = statusFilter === "ACTIVE";
 
+  const chartsRef = useRef(null);
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const [{ default: ExcelJS }, { default: html2canvas }] = await Promise.all([import("exceljs"), import("html2canvas")]);
+      const wb = new ExcelJS.Workbook();
+
+      // Sheet 1: exactly the rows shown in the list view, in the same group order.
+      const ws = wb.addWorksheet("Pipeline");
+      const cols = [
+        ["Odoo Link", 14], ["Group", 24], ["Opportunity Health Score (0-100)", 16], ["Opportunity Name", 44], ["Bidders", 34], ["End User", 34],
+        ["SBU Type", 16], ["Closing Date", 14], ["Status", 12], ["Expected Value", 16], ["Currency", 10], ["Category", 10],
+        ["Category Scaled Value", 18], ["Region", 14], ["Assigned Salesperson", 24], ["Project Type", 18], ["Activity", 30],
+      ];
+      ws.columns = cols.map(([header, width]) => ({ header, width }));
+      groups.forEach(({ key, leads: groupLeads }) => groupLeads.forEach((l) => {
+        const activity = primaryActivityByLead[l.id];
+        const health = HEALTH_POSITIONS[l.x_studio_prospect_health];
+        const row = ws.addRow([
+          { text: "Open in Odoo", hyperlink: `${ODOO_BASE_URL}/odoo/crm/${l.id}` },
+          key,
+          health == null ? "" : Math.round(health),
+          l.name,
+          (Array.isArray(l.x_studio_bidders) ? l.x_studio_bidders : []).map((p) => getPersonName(p, bidderMap)).filter(Boolean).join(", "),
+          l.partner_id?.[1] || l.partner_name || l.x_studio_end_user?.[1] || "",
+          l.x_studio_sbu || "",
+          l.x_studio_expected_closing ? String(l.x_studio_expected_closing).split("T")[0] : "",
+          l.x_studio_lead_status === "ACTIVE" ? getUrgencyMeta(l.x_studio_expected_closing).label.replace("—", "") : "",
+          l.expected_revenue || 0,
+          l.x_studio_currency || "INR",
+          l.x_studio_category || "",
+          getScaledRevenue(l),
+          l.x_studio_responsible_region_1 || "",
+          l.x_studio_assigned_salesperson?.[1] || "",
+          l.x_studio_project_background || "",
+          activity ? `${activity.x_studio_engagement_type || "Activity"} - ${getPersonNames(activity.x_studio_action_by, userMap)}` : "",
+        ]);
+        row.getCell(1).font = { color: { argb: "FF0563C1" }, underline: true };
+      }));
+      ws.getRow(1).font = { bold: true };
+      ws.views = [{ state: "frozen", ySplit: 1 }];
+      ws.autoFilter = { from: "A1", to: { row: 1, column: cols.length } };
+      ["J", "M"].forEach((c) => { ws.getColumn(c).numFmt = "#,##0"; });
+
+      // Sheet 2: dashboard snapshot (charts row) plus the filters and group totals behind it.
+      const ds = wb.addWorksheet("Dashboard");
+      ds.getColumn(1).width = 34;
+      ds.getColumn(2).width = 14;
+      ds.getColumn(3).width = 20;
+      ds.addRow(["Pipeline Dashboard"]).font = { bold: true, size: 14 };
+      ds.addRow(["Status", statusFilter]);
+      ds.addRow(["Period", periodFilter === "Custom Range" || dateFrom || dateTo ? `${periodFilter} (${dateFrom || "…"} to ${dateTo || "…"})` : periodFilter]);
+      ds.addRow(["Group by", groupByOptions.find((o) => o.value === groupBy)?.label || groupBy]);
+      ds.addRow(["Leads", filteredLeads.length]);
+      ds.addRow([]);
+      const head = ds.addRow(["Group", "Leads", "Total Expected Value"]);
+      head.font = { bold: true };
+      groups.forEach(({ key, leads: groupLeads }) => ds.addRow([key, groupLeads.length, groupLeads.reduce((s, l) => s + (l.expected_revenue || 0), 0)]));
+      ds.getColumn(3).numFmt = "#,##0";
+      if (chartsRef.current) {
+        try {
+          const canvas = await html2canvas(chartsRef.current, { backgroundColor: "#ffffff", scale: 2 });
+          const imageId = wb.addImage({ base64: canvas.toDataURL("image/png"), extension: "png" });
+          ds.addImage(imageId, { tl: { col: 4, row: 1 }, ext: { width: canvas.width / 2, height: canvas.height / 2 } });
+        } catch { /* snapshot is best-effort; the tables still export */ }
+      }
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `pipeline-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div>
       <style>{`
@@ -2109,6 +2222,14 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
         <div style={{ width: 1, height: 20, background: "#e5e7eb", flexShrink: 0 }} />
         <FilterSelect value={groupBy} onChange={setGroupBy} options={groupByOptions} prefix="Group by: " width={190} />
         <div style={{ flex: 1 }} />
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          title="Export the current list and dashboard to Excel"
+          style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${T.accent}`, background: T.bgCard, color: T.accent, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: exporting ? "wait" : "pointer", flexShrink: 0, whiteSpace: "nowrap" }}
+        >
+          {exporting ? "Exporting…" : "⬇ Export Excel"}
+        </button>
         <input
           type="text"
           placeholder="Search leads..."
@@ -2176,7 +2297,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
       )}
 
       {/* ── Charts row ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 0.92fr) minmax(0, 1.6fr)", gap: 10, marginBottom: donutFilter || filterProjectType ? 6 : 10 }}>
+      <div ref={chartsRef} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 0.92fr) minmax(0, 1.6fr)", gap: 10, marginBottom: donutFilter || filterProjectType ? 6 : 10 }}>
         {groupBy === "status" ? (
           <RevenueDonut
             leads={filteredLeads}
