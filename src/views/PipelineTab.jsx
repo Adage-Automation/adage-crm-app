@@ -46,12 +46,6 @@ const parseISODate = (iso) => {
   return new Date(y, m - 1, d);
 };
 
-const addMonths = (date, months) => {
-  const d = new Date(date);
-  d.setMonth(d.getMonth() + months);
-  return d;
-};
-
 const toDateInput = (date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -127,20 +121,6 @@ const getPeriodRange = (key, today) => {
   if (key === "This Month") return getMonthRange(today);
   if (key === "This Quarter") return getQuarterRange(today);
   if (key === "This Year") return { start: startOfYear(y), end: endOfYear(y) };
-  if (key === "Last 6 Months") {
-    const start = addMonths(today, -6);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(today);
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
-  }
-  if (key === "Last 12 Months") {
-    const start = addMonths(today, -12);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(today);
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
-  }
   return null;
 };
 
@@ -261,7 +241,7 @@ function MultiSelect({ label, options, selected, onChange, searchable = false, s
         <span style={{ fontSize: 10 }}>{open ? "▲" : "▼"}</span>
       </button>
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 300, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", minWidth: 180, maxHeight: 240, overflowY: "auto" }}>
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 300, background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", minWidth: searchable ? 340 : 180, maxWidth: "80vw", maxHeight: 240, overflowY: "auto" }}>
           {searchable && (
             <div style={{ padding: 8, borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 8 }}>
               <input
@@ -1672,18 +1652,16 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
     { value: "This Month", label: "This Month" },
     { value: "This Quarter", label: "This Quarter" },
     { value: "This Year", label: "This Year" },
-    { value: "Last 6 Months", label: "Last 6 Months" },
-    { value: "Last 12 Months", label: "Last 12 Months" },
     { value: "Custom Range", label: "Custom Range" },
   ]), []);
   const groupByOptions = useMemo(() => ([
+    { value: "sbu", label: "SBU Type" },
     { value: "status", label: "Lead Status" },
     { value: "region", label: "Region" },
     { value: "person", label: "Person" },
     { value: "label", label: "Label" },
     { value: "bidder", label: "Bidders" },
     { value: "enduser", label: "End User" },
-    { value: "sbu", label: "SBU Type" },
   ]), []);
 
   useEffect(() => { setDonutFilter(null); }, [groupBy]);
@@ -2106,8 +2084,8 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
                 display: "flex", flexDirection: "column", gap: 8, minWidth: 200,
               }}
             >
+              <MultiSelect label="SBU Type" options={sbuOptions} selected={filterSbu} onChange={setFilterSbu} />
               <MultiSelect label="Region" options={regionOptions} selected={filterRegion} onChange={setFilterRegion} />
-              <MultiSelect label="SBU" options={sbuOptions} selected={filterSbu} onChange={setFilterSbu} />
               <MultiSelect label="Person" options={personOptions} selected={filterPerson} onChange={setFilterPerson} />
               <MultiSelect
                 label="Bidders"
