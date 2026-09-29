@@ -1426,6 +1426,12 @@ function OverallProspectHealthCard({ leads, engagementsByLead }) {
 }
 
 // ─── List row ─────────────────────────────────────────────────────────────────
+const SORT_KEYS = { "Closing Date": "closing", "Expected Value": "value", "Project Type": "type" };
+const SORT_ACCESSORS = {
+  closing: (l) => l.x_studio_expected_closing || "",
+  value: (l) => l.expected_revenue || 0,
+  type: (l) => l.x_studio_project_background || "",
+};
 const LIST_HEADER_LABELS = ["Opportunity Name", "Bidders", "SBU Type", "Closing Date", "Status", "Expected Value", "Category", "Category Scaled Value", "Region", "Assigned Salesperson", "Project Type", "Activities"];
 // Relative column weights (fr), so the table stretches/shrinks with the window; MIN_COL_PX is the floor.
 const DEFAULT_LIST_COL_WIDTHS = [26, 14, 8, 8, 8, 9, 6, 9, 8, 10, 9, 16];
@@ -1582,6 +1588,8 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
   const defaultPeriod = "This Year";
   const [viewMode, setViewMode] = useState("list");
   const [groupBy, setGroupBy] = useState("status");
+  const [sort, setSort] = useState(null); // { key: "closing" | "value", dir: "asc" | "desc" }
+  const toggleSort = (key) => setSort((s) => (s?.key === key && s.dir === "asc" ? { key, dir: "desc" } : { key, dir: "asc" }));
   const [filterRegion, setFilterRegion] = useState([]);
   const [statusFilter, setStatusFilter] = useState("ACTIVE");
   const [filterPerson, setFilterPerson] = useState([]);
@@ -1828,6 +1836,13 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
     });
     // Sort each group
     Object.values(map).forEach(arr => {
+      if (sort) {
+        const f = SORT_ACCESSORS[sort.key];
+        const dir = sort.dir === "asc" ? 1 : -1;
+        const blank = (l) => !f(l);
+        arr.sort((a, b) => blank(a) - blank(b) || (f(a) < f(b) ? -dir : f(a) > f(b) ? dir : 0)); // blanks always last
+        return;
+      }
       arr.sort((a, b) => {
         const ad = a.x_studio_expected_closing;
         const bd = b.x_studio_expected_closing;
@@ -1853,7 +1868,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
     });
     else keys.sort();
     return keys.map((key, i) => ({ key, leads: map[key], idx: i }));
-  }, [filteredLeads, groupBy, engagementsByLead, bidderMap]);
+  }, [filteredLeads, groupBy, engagementsByLead, bidderMap, sort]);
 
   const groupColor = (key, idx) => {
     if (groupBy === "region") return REGION_COLORS[key] || T.accent;
@@ -2445,8 +2460,13 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
               <div style={{ border: `1px solid ${T.border}`, borderTop: "none", borderRadius: "0 0 10px 10px", overflowX: "auto", overflowY: "visible" }}>
                 <div className="pipeline-list-header">
                   {LIST_HEADER_LABELS.map((label, colIdx) => (
-                    <div key={label} className="pipeline-list-header-cell">
-                      <span>{label}</span>
+                    <div
+                      key={label}
+                      className="pipeline-list-header-cell"
+                      onClick={SORT_KEYS[label] ? () => toggleSort(SORT_KEYS[label]) : undefined}
+                      style={SORT_KEYS[label] ? { cursor: "pointer", userSelect: "none" } : undefined}
+                    >
+                      <span>{label}{SORT_KEYS[label] && (sort?.key === SORT_KEYS[label] ? (sort.dir === "asc" ? " ▲" : " ▼") : " ⇅")}</span>
                       {label === "Category Scaled Value" && (
                         <span
                           title={"Cat A: same as Expected Value\nCat B: half (50%) of Expected Value\nLeads with no category: shown as —"}
