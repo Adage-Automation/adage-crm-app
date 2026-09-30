@@ -40,7 +40,7 @@ export default function App() {
   const account = accounts[0];
   const email = account?.username;
   const [activeTab, setActiveTab]           = useState("pipeline");
-  const [data, setData]                     = useState({ leads: [], engagements: [], stages: [], closedLeads: [] });
+  const [data, setData]                     = useState({ leads: [], engagements: [], stages: [] });
   const [loading, setLoading]               = useState(true);
   const [error, setError]                   = useState(null);
   const [popupDay, setPopupDay]             = useState(null);
@@ -98,7 +98,7 @@ export default function App() {
         leadDomain.push(["company_id","in", companies.map(c => c.id)]);
       }
 
-      const [leads, engagements, stages, closedLeads] = await Promise.all([
+      const [leads, engagements, stages] = await Promise.all([
         fetchOdoo("crm.lead", "search_read", [leadDomain], {
           fields: ["name","partner_name","partner_id","stage_id","expected_revenue","x_studio_currency","probability","won_status",
             "x_studio_responsible_region_1","x_studio_expected_month","x_studio_expected_year",
@@ -117,10 +117,6 @@ export default function App() {
           context: { lang: "en_US", bin_size: true }, // binary field returns size string, not the file
         }),
         fetchOdoo("crm.stage", "search_read", [[]], { fields: ["name","sequence"], order: "sequence asc" }),
-        fetchOdoo("crm.lead", "search_read", [leadDomain], {
-          fields: ["stage_id","expected_revenue","active"], limit: 500,
-          context: { lang: "en_US" },
-        }),
       ]);
 
       const activeLeadIds = new Set((leads || []).map((lead) => lead.id).filter(Boolean));
@@ -165,7 +161,7 @@ export default function App() {
 
       setUserMap(map);
       setBidderMap(bidderNameMap);
-      setData({ leads: leads || [], engagements: visibleEngagements, stages: stages || [], closedLeads: closedLeads || [] });
+      setData({ leads: leads || [], engagements: visibleEngagements, stages: stages || [] });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -186,33 +182,7 @@ export default function App() {
   const leads      = data.leads;
   const engagements = data.engagements;
 
-  const wonLeads  = (data.closedLeads || []).filter(l => l.stage_id?.[1] === "Won");
-  const lostLeads = (data.closedLeads || []).filter(l => l.stage_id?.[1] === "Lost");
-  const totalRev  = leads.reduce((s, l) => s + (l.expected_revenue || 0), 0);
-  const hotLeads  = leads.filter(l => l.x_studio_importance_of_lead === "Hot");
   const plannedVisits = engagements.filter(e => e.x_studio_engagement_status === "Planned");
-  const winRate   = (wonLeads.length + lostLeads.length) > 0
-    ? Math.round((wonLeads.length / (wonLeads.length + lostLeads.length)) * 100) : null;
-
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const overdueLeads = leads.filter(l => {
-    if (!l.x_studio_expected_closing) return false;
-    const d = new Date(l.x_studio_expected_closing); d.setHours(0,0,0,0);
-    return d < today && l.won_status !== "won" && l.won_status !== "lost";
-  });
-  const overdueRev = overdueLeads.reduce((s, l) => s + (l.expected_revenue || 0), 0);
-
-  const byRegion = {}; leads.forEach(l => { const r = l.x_studio_responsible_region_1 || "Unknown"; if (!byRegion[r]) byRegion[r] = { count:0, rev:0 }; byRegion[r].count++; byRegion[r].rev += l.expected_revenue||0; });
-  const byStage  = {}; leads.forEach(l => { const s = l.stage_id?.[1] || "Unknown"; if (!byStage[s]) byStage[s] = { count:0, rev:0 }; byStage[s].count++; byStage[s].rev += l.expected_revenue||0; });
-
-  const byCustomerType = {}; leads.forEach(l => { const ct = l.x_studio_customer_type || "Unknown"; if (!byCustomerType[ct]) byCustomerType[ct] = { count:0, rev:0 }; byCustomerType[ct].count++; byCustomerType[ct].rev += l.expected_revenue||0; });
-  const gbTotal   = Object.values(byCustomerType).reduce((s,v) => s + v.rev, 0) || 1;
-  const gbEntries = Object.entries(byCustomerType).sort((a,b) => b[1].rev - a[1].rev);
-
-  const byProjectBg = {}; leads.forEach(l => { const pb = l.x_studio_project_background || "Unknown"; if (!byProjectBg[pb]) byProjectBg[pb] = { count:0, rev:0 }; byProjectBg[pb].count++; byProjectBg[pb].rev += l.expected_revenue||0; });
-  const pbTotal   = Object.values(byProjectBg).reduce((s,v) => s + v.rev, 0) || 1;
-  const pbEntries = Object.entries(byProjectBg).sort((a,b) => b[1].rev - a[1].rev);
-
   const personRegion = {};
   engagements.filter(e => ["Planned","Rescheduled"].includes(e.x_studio_engagement_status)).forEach(e => {
     const persons = e.x_studio_action_by || [];
@@ -228,10 +198,6 @@ export default function App() {
   const personKeys = Object.keys(personRegion).sort((a,b) =>
     Object.values(personRegion[b]).reduce((s,v)=>s+v,0) - Object.values(personRegion[a]).reduce((s,v)=>s+v,0)
   );
-
-  const hotSorted = [...leads]
-    .filter(l => l.x_studio_importance_of_lead === "Hot" || l.priority === "2" || l.priority === "3")
-    .sort((a,b) => (b.expected_revenue||0) - (a.expected_revenue||0)).slice(0, 8);
 
   const upcomingVisits = [...engagements]
     .filter(e => e.x_studio_engagement_status === "Planned" && e.x_studio_planned_date)
