@@ -112,8 +112,9 @@ export default function App() {
         }),
         fetchOdoo("x_crm_lead_line_163b3", "search_read", [[]], {
           fields: ["x_name","x_crm_lead_id","x_studio_engagement_type","x_studio_planned_date","x_studio_engagement_status","x_studio_action_by",
-            "x_studio_remarkscomments","x_studio_rescheduled_date","x_studio_engagement_with","x_studio_completed_date"],
+            "x_studio_remarkscomments","x_studio_rescheduled_date","x_studio_engagement_with","x_studio_completed_date","x_studio_upload_document"],
           limit: 500,
+          context: { lang: "en_US", bin_size: true }, // binary field returns size string, not the file
         }),
         fetchOdoo("crm.stage", "search_read", [[]], { fields: ["name","sequence"], order: "sequence asc" }),
         fetchOdoo("crm.lead", "search_read", [leadDomain], {

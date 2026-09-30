@@ -522,7 +522,6 @@ function ActivityDetailModal({ engagement, lead, userMap, onClose }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <div style={{ fontWeight: 700, fontSize: 16, color: T.textPrimary }}>Activity Detail</div>
-            <span className="pill" style={{ background: statusBgs[status] || T.bgInput, color: statusColors[status] || T.textMuted, fontSize: 10, fontWeight: 700 }}>{status}</span>
           </div>
           <button onClick={onClose} style={{ background: T.bgInput, border: `1px solid ${T.border}`, fontSize: 16, cursor: "pointer", color: T.textMuted, lineHeight: 1, padding: "6px 10px", borderRadius: 8, fontFamily: "inherit" }}>✕</button>
         </div>
@@ -534,11 +533,7 @@ function ActivityDetailModal({ engagement, lead, userMap, onClose }) {
           <Field label="Engagement With" value={engagement.x_studio_engagement_with || "—"} />
           <Field label="Assigned To" value={assignedTo} />
           <Field label="Expected Value" value={lead?.expected_revenue > 0 ? fmtByCurrency(lead.expected_revenue, lead.x_studio_currency || "INR") : "—"} color={lead?.expected_revenue > 0 ? T.success : T.textMuted} />
-          <Field label="Region" value={lead?.x_studio_responsible_region_1 || "—"} color={REGION_COLORS[lead?.x_studio_responsible_region_1] || T.textPrimary} />
-        </div>
-
-        {detailLabel && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "18px 24px", marginBottom: 16 }}>
+          {detailLabel && (
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>{detailLabel}</div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -548,12 +543,22 @@ function ActivityDetailModal({ engagement, lead, userMap, onClose }) {
                 <span style={{ fontSize: 14, color: datePillColor, fontWeight: 600 }}>{formatSimpleDate(detailDate)}</span>
               </div>
             </div>
-          </div>
-        )}
+          )}
+          <Field label="Activity Status" value={engagement.x_studio_engagement_status || "—"} color={statusColors[status] || T.textMuted} />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "18px 24px", marginBottom: 16 }}>
+          <Field label="Region" value={lead?.x_studio_responsible_region_1 || "—"} color={REGION_COLORS[lead?.x_studio_responsible_region_1] || T.textPrimary} />
+        </div>
 
         <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 14 }}>
           <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", marginBottom: 6 }}>Remarks / Comments</div>
           <div style={{ fontSize: 14, color: remarks === "—" ? T.textMuted : T.textPrimary, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{remarks}</div>
+        </div>
+
+        <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 14, marginTop: 14 }}>
+          <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase", marginBottom: 6 }}>Document</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: engagement.x_studio_upload_document ? T.success : T.textMuted }}>{engagement.x_studio_upload_document ? "Attached" : "Not attached"}</div>
         </div>
 
         {lead?.id && (
@@ -1564,8 +1569,15 @@ function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, hea
               textAlign: "left",
             }}
           >
+            <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: "#7C3AED", lineHeight: 1.25 }}>
               {activity.x_studio_engagement_type || "Activity"}
+            </span>
+            {activity.x_studio_engagement_status && (
+              <span style={{ fontSize: 9, fontWeight: 700, padding: "0 6px", borderRadius: 999, lineHeight: 1.5, background: T.accentBg, color: T.accent, ...{ Planned: { background: T.accentBg, color: T.accent }, Completed: { background: T.successBg, color: T.success }, Cancelled: { background: T.dangerBg, color: T.danger }, Rescheduled: { background: T.warningBg, color: "#F59E0B" } }[activity.x_studio_engagement_status] }}>
+                {activity.x_studio_engagement_status}
+              </span>
+            )}
             </span>
             <span style={{ fontSize: 10.5, color: T.textSecondary, lineHeight: 1.25 }}>
               {activityAssigned}

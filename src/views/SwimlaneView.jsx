@@ -396,6 +396,7 @@ function ActivityDetailCard({ engagement, lead, empMap, onClose }) {
         <Field label="Engagement With" value={engagement.x_studio_engagement_with || "—"} />
         <Field label="Assigned To" value={assignedTo} />
         {detailLabel && <Field label={detailLabel} value={fmtDate(detailDate)} />}
+        <Field label="Document" value={engagement.x_studio_upload_document ? "Attached" : "Not attached"} color={engagement.x_studio_upload_document ? T.success : T.textMuted} />
       </div>
 
       <div>
@@ -731,9 +732,10 @@ export default function SwimlaneView() {
         fields: [
           "x_studio_planned_date", "x_studio_rescheduled_date", "x_studio_completed_date",
           "x_studio_engagement_type", "x_studio_engagement_status",
-          "x_studio_action_by", "x_crm_lead_id", "x_studio_remarkscomments", "x_studio_engagement_with",
+          "x_studio_action_by", "x_crm_lead_id", "x_studio_remarkscomments", "x_studio_engagement_with", "x_studio_upload_document",
         ],
         limit: 1000,
+        context: { lang: "en_US", bin_size: true }, // binary field returns size string, not the file
       });
       const engList = rawEngagements || [];
 

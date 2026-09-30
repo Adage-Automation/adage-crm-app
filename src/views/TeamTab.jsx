@@ -632,27 +632,6 @@ function ActivityCard({ eng, lead, hasCompleted, hasAnyActivity: hasAnyActivityF
         <div style={{ fontSize: 12, fontWeight: 600, color: T.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {lead?.partner_id?.[1] || eng.x_crm_lead_id?.[1] || "—"}
         </div>
-        {odooLeadId && (
-          <a
-            href={`${ODOO_BASE_URL}/odoo/crm/${odooLeadId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              marginTop: 4,
-              fontSize: 11,
-              fontWeight: 700,
-              color: "#02818A",
-              textDecoration: "none",
-              opacity: 1,
-            }}
-          >
-            View in Odoo ↗
-          </a>
-        )}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, minWidth: 0 }}>
           <HealthTag
             health={lead?.x_studio_prospect_health}
@@ -678,6 +657,27 @@ function ActivityCard({ eng, lead, hasCompleted, hasAnyActivity: hasAnyActivityF
             </span>
           )}
         </div>
+        {odooLeadId && (
+          <a
+            href={`${ODOO_BASE_URL}/odoo/crm/${odooLeadId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              marginTop: 4,
+              fontSize: 11,
+              fontWeight: 700,
+              color: "#02818A",
+              textDecoration: "none",
+              opacity: 1,
+            }}
+          >
+            View in Odoo ↗
+          </a>
+        )}
       </div>
     </div>
   );
