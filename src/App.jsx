@@ -213,7 +213,7 @@ export default function App() {
   const pbEntries = Object.entries(byProjectBg).sort((a,b) => b[1].rev - a[1].rev);
 
   const personRegion = {};
-  engagements.forEach(e => {
+  engagements.filter(e => ["Planned","Rescheduled"].includes(e.x_studio_engagement_status)).forEach(e => {
     const persons = e.x_studio_action_by || [];
     const lead    = leads.find(l => l.id === e.x_crm_lead_id?.[0]);
     const region  = lead?.x_studio_responsible_region_1 || "Unknown";

@@ -1426,15 +1426,16 @@ function OverallProspectHealthCard({ leads, engagementsByLead }) {
 }
 
 // ─── List row ─────────────────────────────────────────────────────────────────
-const SORT_KEYS = { "Closing Date": "closing", "Expected Value": "value", "Project Type": "type" };
+const SORT_KEYS = { "Closing Date": "closing", "Expected Value": "value", "Project Type": "type", "Industry": "industry" };
 const SORT_ACCESSORS = {
   closing: (l) => l.x_studio_expected_closing || "",
   value: (l) => l.expected_revenue || 0,
   type: (l) => l.x_studio_project_background || "",
+  industry: (l) => l.x_studio_industry_type || "",
 };
-const LIST_HEADER_LABELS = ["Opportunity Name", "Bidders", "SBU Type", "Closing Date", "Status", "Expected Value", "Category", "Category Scaled Value", "Region", "Assigned Salesperson", "Project Type", "Activities"];
+const LIST_HEADER_LABELS = ["Opportunity Name", "Bidders", "SBU Type", "Closing Date", "Status", "Expected Value", "Category", "Category Scaled Value", "Region", "Assigned Salesperson", "Project Type", "Industry", "Activities"];
 // Relative column weights (fr), so the table stretches/shrinks with the window; MIN_COL_PX is the floor.
-const DEFAULT_LIST_COL_WIDTHS = [26, 14, 8, 8, 8, 9, 6, 9, 8, 10, 9, 16];
+const DEFAULT_LIST_COL_WIDTHS = [26, 14, 8, 8, 8, 9, 6, 9, 8, 10, 9, 9, 16];
 const LIST_COL_WIDTHS_STORAGE_KEY = "adage_crm_pipeline_list_col_weights_v2";
 const MIN_COL_PX = 60;
 const listGridTemplate = (weights) => weights.map((w) => `minmax(${MIN_COL_PX}px, ${w}fr)`).join(" ");
@@ -1540,6 +1541,8 @@ function ListRow({ lead, activity, userMap, bidderMap = {}, onActivityClick, hea
           : <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>}
       </div>
 
+      <div style={{ fontSize: 11.5, color: "#374151" }}>{lead.x_studio_industry_type || "—"}</div>
+
       <div style={{ display: "flex", justifyContent: "flex-start" }}>
         {activity ? (
           <button
@@ -1596,6 +1599,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
   const [filterSbu, setFilterSbu] = useState([]);
   const [filterBidder, setFilterBidder] = useState([]);
   const [filterEndUser, setFilterEndUser] = useState([]);
+  const [filterIndustry, setFilterIndustry] = useState([]);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const filterPanelRef = useRef(null);
   const [colWidths, setColWidths] = useState(() => {
@@ -1669,6 +1673,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
     () => [...new Set(leads.map((l) => l.x_studio_end_user?.[1]).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [leads]
   );
+  const industryOptions = useMemo(() => [...new Set(leads.map((l) => l.x_studio_industry_type).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [leads]);
   const statusOptions = useMemo(() => {
     const unique = [...new Set(leads.map(l => l.x_studio_lead_status).filter(Boolean))];
     const ordered = ["ACTIVE", "CONVERTED TO RFQ", "REGRET", "LOST", "DEAD"];
@@ -1693,6 +1698,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
     { value: "label", label: "Label" },
     { value: "bidder", label: "Bidders" },
     { value: "enduser", label: "End User" },
+    { value: "industry", label: "Industry" },
   ]), []);
 
   useEffect(() => { setDonutFilter(null); }, [groupBy]);
@@ -1757,6 +1763,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
         if (!leadBidderNames.some((name) => filterBidder.includes(name))) return false;
       }
       if (filterEndUser.length > 0 && !filterEndUser.includes(l.x_studio_end_user?.[1])) return false;
+      if (filterIndustry.length > 0 && !filterIndustry.includes(l.x_studio_industry_type)) return false;
       if (dateFrom || dateTo) {
         const d = parseISODate(l.x_studio_expected_closing);
         if (!d) return false;
@@ -1816,7 +1823,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
       }
       return true;
     });
-  }, [leads, filterRegion, filterSbu, statusFilter, filterPerson, filterBidder, filterEndUser, bidderMap, donutFilter, filterProjectType, selectedMonth, selectedMonthCurrency, searchQuery, dateFrom, dateTo]);
+  }, [leads, filterRegion, filterSbu, statusFilter, filterPerson, filterBidder, filterEndUser, filterIndustry, bidderMap, donutFilter, filterProjectType, selectedMonth, selectedMonthCurrency, searchQuery, dateFrom, dateTo]);
 
   // Group + sort
   const groups = useMemo(() => {
@@ -1828,6 +1835,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
       else if (groupBy === "label") key = getLeadLabelMeta(l, engagementsByLead).text || "Not yet scored";
       else if (groupBy === "bidder") key = (Array.isArray(l.x_studio_bidders) && l.x_studio_bidders.length ? getPersonName(l.x_studio_bidders[0], bidderMap) : "") || "No Bidder";
       else if (groupBy === "enduser") key = l.x_studio_end_user?.[1] || "No End User";
+      else if (groupBy === "industry") key = l.x_studio_industry_type || "No Industry";
       else if (groupBy === "sbu") key = l.x_studio_sbu || "No SBU";
       else if (groupBy === "status") key = l.x_studio_lead_status || "No Status";
       else key = l.x_studio_lead_status || "No Status";
@@ -1876,18 +1884,20 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
     if (groupBy === "label") return LABEL_GROUP_COLORS[key] || T.accent;
     if (groupBy === "bidder") return PERSON_COLORS[idx % PERSON_COLORS.length];
     if (groupBy === "enduser") return PERSON_COLORS[idx % PERSON_COLORS.length];
+    if (groupBy === "industry") return PERSON_COLORS[idx % PERSON_COLORS.length];
     if (groupBy === "sbu") return PERSON_COLORS[idx % PERSON_COLORS.length];
     if (groupBy === "status") return getPill(key).text;
     return getPill(key).text;
   };
 
   const handleSetViewMode = (mode) => { setViewMode(mode); };
-  const activeFilterCategoryCount = [filterRegion, filterSbu, filterPerson, filterBidder, filterEndUser].filter((arr) => arr.length > 0).length;
+  const activeFilterCategoryCount = [filterRegion, filterSbu, filterPerson, filterBidder, filterEndUser, filterIndustry].filter((arr) => arr.length > 0).length;
   const anyFilter = filterRegion.length > 0
     || filterSbu.length > 0
     || filterPerson.length > 0
     || filterBidder.length > 0
     || filterEndUser.length > 0
+    || filterIndustry.length > 0
     || searchQuery !== ""
     || periodFilter !== defaultPeriod
     || statusFilter !== "ACTIVE";
@@ -1907,7 +1917,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
       const cols = [
         ["Odoo Link", 14], ["Group", 24], ["Opportunity Label", 38], ["Opportunity Name", 44], ["Bidders", 34], ["End User", 34],
         ["SBU Type", 16], ["Closing Date", 14], ["Status", 12], ["Expected Value", 16], ["Currency", 10], ["Category", 10],
-        ["Category Scaled Value", 18], ["Region", 14], ["Assigned Salesperson", 24], ["Project Type", 18], ["Activity", 30],
+        ["Category Scaled Value", 18], ["Region", 14], ["Assigned Salesperson", 24], ["Project Type", 18], ["Industry", 20], ["Activity", 30],
       ];
       ws.columns = cols.map(([header, width]) => ({ header, width }));
       groups.forEach(({ key, leads: groupLeads }) => groupLeads.forEach((l) => {
@@ -1929,6 +1939,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
           l.x_studio_responsible_region_1 || "",
           l.x_studio_assigned_salesperson?.[1] || "",
           l.x_studio_project_background || "",
+          l.x_studio_industry_type || "",
           activity ? `${activity.x_studio_engagement_type || "Activity"} - ${getPersonNames(activity.x_studio_action_by, userMap)}` : "",
         ]);
         row.getCell(1).font = { color: { argb: "FF0563C1" }, underline: true };
@@ -2220,6 +2231,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
                 searchable
                 searchPlaceholder="Search end user..."
               />
+              <MultiSelect label="Industry" options={industryOptions} selected={filterIndustry} onChange={setFilterIndustry} />
             </div>
           )}
         </div>
@@ -2266,6 +2278,7 @@ export function PipelineTab({ leads, engagements = [], userMap = {}, bidderMap =
               setFilterPerson([]);
               setFilterBidder([]);
               setFilterEndUser([]);
+              setFilterIndustry([]);
               setStatusFilter("ACTIVE");
               setPeriodFilter(defaultPeriod);
               setDateFrom(range ? toDateInput(range.start) : "");

@@ -229,7 +229,7 @@ function PivotCard({ leads, personRegion, personKeys, allRegions, engagements, u
   // Resolve engagements for a given person
   const engsByPerson = useMemo(() => {
     const map = {};
-    engagements.forEach(eng => {
+    engagements.filter(eng => ["Planned", "Rescheduled"].includes(eng.x_studio_engagement_status)).forEach(eng => {
       const persons = Array.isArray(eng.x_studio_action_by) ? eng.x_studio_action_by : [];
       const names = persons.map(p => getPersonName(p, userMap)).filter(Boolean);
       if (names.length === 0) {
